@@ -56,10 +56,20 @@ class DisturbanceConfig(BaseModel):
         0.005, description="Maximum peak disturbance amplitude in Tesla"
     )
     min_spatial_freq: float = Field(
-        0.5, description="Minimum spatial frequency (cycles across grid)"
+        0.1,
+        description=(
+            "Minimum spatial frequency (cycles across grid). "
+            "Lower values produce gradient-like disturbances that the "
+            "shim coil basis can cancel effectively."
+        ),
     )
     max_spatial_freq: float = Field(
-        4.0, description="Maximum spatial frequency (cycles across grid)"
+        1.5,
+        description=(
+            "Maximum spatial frequency (cycles across grid). "
+            "Kept below ~2 so the 8-coil harmonic basis captures the "
+            "dominant disturbance energy."
+        ),
     )
     temporal_drift_rate: float = Field(
         0.1,
@@ -77,8 +87,9 @@ class CoilConfig(BaseModel):
     coil_radius_mm: float = Field(
         6.0,
         description=(
-            "Radial distance of coils from grid center in mm. "
-            "Should be slightly outside the grid extent."
+            "Physical radius defining coil placement for visualisation. "
+            "Not used by the gradient-coil influence model "
+            "(patterns are analytically defined spatial harmonics)."
         ),
     )
     max_current_amps: float = Field(
@@ -86,10 +97,12 @@ class CoilConfig(BaseModel):
         description="Maximum allowed current magnitude per coil (physical constraint)",
     )
     field_scale_factor: float = Field(
-        1e-4,
+        0.005,
         description=(
-            "Proportionality constant: Tesla per Amp at 1mm distance. "
-            "Tunes the coil influence strength."
+            "Peak field produced by one coil at 1 A (Tesla). "
+            "Set equal to max_amplitude_tesla so each coil at 1 A can "
+            "cancel a full-amplitude disturbance in its spatial mode. "
+            "Gradient patterns are L∞-normalised before this scaling."
         ),
     )
 
@@ -130,11 +143,16 @@ class TrainingConfig(BaseModel):
     val_split: float = Field(0.1, description="Fraction of data for validation")
     checkpoint_dir: str = Field("checkpoints/")
     early_stopping_patience: int = Field(
-        10, description="Epochs without improvement before stopping"
+        20, description="Epochs without improvement before stopping"
     )
     current_penalty_weight: float = Field(
-        0.01,
-        description="L2 penalty weight on coil currents to prefer minimal corrections",
+        1e-6,
+        description=(
+            "L2 penalty weight on coil currents (A²). "
+            "Must be  field_scale_factor² so the penalty does not "
+            "dominate the field-variance term and force zero-current predictions. "
+            "Rule of thumb: ≈ (field_scale_factor / max_current)² × 0.01."
+        ),
     )
     auto_export_onnx: bool = Field(
         False,

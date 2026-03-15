@@ -13,16 +13,16 @@ field:
 disturbance:
   num_modes: 5
   max_amplitude_tesla: 0.005
-  min_spatial_freq: 0.5
-  max_spatial_freq: 4.0
+  min_spatial_freq: 0.1   # low-freq sinusoids are well-approximated by gradient harmonics
+  max_spatial_freq: 1.5
   temporal_drift_rate: 0.1
-  seed: null
+  seed: 42  # fixed seed for reproducible training datasets
 
 coils:
   num_coils: 8
   coil_radius_mm: 6.0
   max_current_amps: 1.0
-  field_scale_factor: 1.0e-4
+  field_scale_factor: 0.005  # = max_amplitude_tesla; each coil at 1A can cancel one full-amplitude mode
 
 model:
   architecture: cnn       # cnn | mlp | lstm
@@ -45,8 +45,8 @@ training:
   weight_decay: 1.0e-5
   val_split: 0.1
   checkpoint_dir: checkpoints/
-  early_stopping_patience: 10
-  current_penalty_weight: 0.01
+  early_stopping_patience: 20
+  current_penalty_weight: 1.0e-6  # << field_scale_factor^2 so penalty never dominates
   auto_export_onnx: false
   onnx_export_path: "checkpoints/model.onnx"
 

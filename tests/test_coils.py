@@ -29,33 +29,23 @@ def test_zero_current_zero_field(coils: ShimCoilArray) -> None:
     assert np.allclose(field, 0.0)
 
 
-def test_equal_currents_symmetric(coils: ShimCoilArray) -> None:
-    """Equal currents → approximately rotationally symmetric field."""
-    currents = np.ones(8, dtype=np.float32)
-    field = coils.compute_field(currents)
-    # Check 4-fold symmetry: field at (i,j) ≈ field at (j, i) for square-symmetric arrangement
-    # More reliably: field should be symmetric under 90-degree rotation (approx)
-    rotated = np.rot90(field)
-    assert np.allclose(field, rotated, atol=1e-4)
+def test_influence_matrix_full_rank(coils: ShimCoilArray) -> None:
+    """All 8 coil patterns are linearly independent (gradient basis has full rank)."""
+    A = coils.influence_matrix.reshape(coils.num_coils, -1)
+    rank = int(np.linalg.matrix_rank(A))
+    assert rank == coils.num_coils, f"Expected rank {coils.num_coils}, got {rank}"
 
 
 def test_single_coil_falloff(coils: ShimCoilArray) -> None:
-    """Single coil's influence decreases with distance from the coil."""
-    # Coil 0 is at angle 0 (positive x-axis), OUTSIDE the grid extent (6mm > 5mm)
-    # So within the grid the peak influence is at the rightmost column.
+    """Coil 0 (X-dipole) has higher influence at the +x edge than at x=0."""
     influence = coils.influence_matrix[0]
     center_row = coils.grid.size // 2
 
-    # Horizontal slice at y=0
+    # Horizontal slice at y≈0
     row = influence[center_row, :]
-    # Peak should be at rightmost column (closest to the coil at +6mm)
-    peak_idx = int(np.argmax(row))
-    assert peak_idx == coils.grid.size - 1 or row[peak_idx] > row[0], (
-        "Coil 0 influence should be higher near the +x edge"
-    )
-    # Influence must drop as we move away from the coil (leftward)
+    # X-dipole peaks at rightmost column (x = +extent/2)
     assert row[-1] > row[coils.grid.size // 2], (
-        "Influence should be greater near +x edge than at center"
+        "X-dipole coil influence should be greater at +x edge than at center"
     )
 
 

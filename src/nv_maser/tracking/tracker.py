@@ -8,7 +8,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -58,7 +58,7 @@ class ExperimentTracker:
         notes: str = "",
     ) -> int:
         """Insert a new run row and return its run_id."""
-        timestamp = datetime.utcnow().isoformat()
+        timestamp = datetime.now(timezone.utc).isoformat()
         config_hash = self._config_snapshot(config)
         num_samples: int | None = None
         epochs: int | None = None
@@ -95,7 +95,7 @@ class ExperimentTracker:
 
     def finish_run(self, run_id: int, best_val_loss: float) -> None:
         """Mark a run as complete, storing best_val_loss and end_timestamp."""
-        end_timestamp = datetime.utcnow().isoformat()
+        end_timestamp = datetime.now(timezone.utc).isoformat()
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
                 """

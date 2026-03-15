@@ -1,8 +1,13 @@
 """
-Simulated micro-coil array using simplified Biot-Savart field model.
+Simulated shim coil array using analytically-defined spatial harmonic patterns.
 
-Each coil produces a field that falls off as 1/r² from its position.
-The superposition of all coils with given currents produces the corrective field.
+Each coil produces one of the standard 2D magnetic shim-coil basis functions
+(spatial harmonics: X, Y, XY, X²-Y², …), which is how real NMR/NV shim coils
+are wound — each explicitly to cancel one specific term in the field-error
+expansion.
+
+This replaces the earlier 1/r² approximation, which produced nearly-flat patterns
+inside the active zone and was therefore unable to cancel sinusoidal disturbances.
 """
 from __future__ import annotations
 
@@ -13,16 +18,60 @@ from ..config import CoilConfig
 from .grid import SpatialGrid
 
 
+# ---------------------------------------------------------------------------
+# Gradient-coil basis functions (2D spatial harmonics, normalised to ‖·‖∞ = 1)
+# ---------------------------------------------------------------------------
+
+def _gradient_basis(xn: NDArray, yn: NDArray) -> list[NDArray]:
+    """
+    Return the eight standard 2D shim-coil basis patterns.
+
+    Coordinates *xn* and *yn* should already be normalised so that the
+    active-zone edge sits at ±1.  Each pattern is divided by its own L∞ norm
+    so that at full current (1 A) the peak field contribution is exactly
+    ``field_scale_factor`` Tesla regardless of polynomial order.
+
+    Basis:
+        0  X-dipole              ∝ x
+        1  Y-dipole              ∝ y
+        2  X²−Y² quadrupole      ∝ x²−y²
+        3  XY quadrupole         ∝ xy
+        4  Circular (Z₂ analog)  ∝ x²+y²
+        5  X₃ hexapole           ∝ x³−3xy²
+        6  Y₃ hexapole           ∝ 3x²y−y³
+        7  XY(X²−Y²) octupole    ∝ xy(x²−y²)
+    """
+    raw = [
+        xn,                          # [0] X-dipole
+        yn,                          # [1] Y-dipole
+        xn**2 - yn**2,               # [2] X²−Y² quadrupole
+        xn * yn,                     # [3] XY quadrupole
+        xn**2 + yn**2,               # [4] circular (Z₂ analog)
+        xn * (xn**2 - 3 * yn**2),    # [5] X₃ hexapole
+        yn * (3 * xn**2 - yn**2),    # [6] Y₃ hexapole
+        xn * yn * (xn**2 - yn**2),   # [7] XY(X²−Y²) octupole
+    ]
+    # Normalise each pattern to L∞ = 1 so field_scale_factor is meaningful
+    normalised = []
+    for p in raw:
+        max_abs = float(np.abs(p).max())
+        normalised.append(p / (max_abs + 1e-12))
+    return normalised
+
+
 class ShimCoilArray:
     """
-    Array of N shim coils arranged in a circle around the diamond slab.
+    Array of N shim coils whose field patterns are 2D spatial harmonics.
 
-    Physics model (simplified Biot-Savart)::
+    Each coil corresponds to one basis function in the gradient expansion,
+    so the controller has direct access to each spatial mode independently.
 
-        B_coil_i(x, y) = (scale_factor * I_i) / (r_i² + ε²)
+    Physics model::
 
-    where r_i is the distance from coil i to point (x,y), I_i is the current,
-    and ε is a small softening term to prevent singularity at the coil center.
+        B_coil_c(x, y) = field_scale_factor × I_c × H_c(x̂, ŷ)
+
+    where H_c is the c-th normalised harmonic, I_c is the coil current (A),
+    x̂ = x / (extent/2), ŷ = y / (extent/2).
     """
 
     def __init__(self, grid: SpatialGrid, config: CoilConfig) -> None:
@@ -30,40 +79,36 @@ class ShimCoilArray:
         self.config = config
         self.num_coils = config.num_coils
 
-        # Place coils in a circle
+        # Coil positions remain defined (used for visualisation / legacy tests)
         angles = np.linspace(0, 2 * np.pi, self.num_coils, endpoint=False)
-        self.coil_x = config.coil_radius_mm * np.cos(angles)  # (num_coils,)
-        self.coil_y = config.coil_radius_mm * np.sin(angles)  # (num_coils,)
+        self.coil_x = config.coil_radius_mm * np.cos(angles)
+        self.coil_y = config.coil_radius_mm * np.sin(angles)
 
-        # Precompute the influence matrix: field contribution of each coil at unit current
-        # Shape: (num_coils, grid_size, grid_size)
+        # Precompute the influence matrix
         self.influence_matrix = self._compute_influence_matrix()
 
     def _compute_influence_matrix(self) -> NDArray[np.float32]:
         """
         Precompute field contribution of each coil at 1 Amp current.
 
-        Uses vectorized broadcasting — no Python loops over grid points.
+        Uses analytically-defined 2D spatial harmonic patterns (the standard
+        basis for magnetic field shimming).  Each pattern is L∞-normalised
+        then scaled by ``field_scale_factor`` so the caller can reason about
+        peak field amplitudes directly.
 
         Returns:
             (num_coils, size, size) influence matrix in Tesla/Amp.
         """
-        # Coil positions: (num_coils, 1, 1)
-        cx = self.coil_x[:, np.newaxis, np.newaxis]
-        cy = self.coil_y[:, np.newaxis, np.newaxis]
+        half_extent = self.grid.extent / 2.0        # mm
+        xn = self.grid.x / half_extent              # ∈ [−1, 1]
+        yn = self.grid.y / half_extent              # ∈ [−1, 1]
 
-        # Grid positions: (1, size, size)
-        gx = self.grid.x[np.newaxis, :, :]
-        gy = self.grid.y[np.newaxis, :, :]
+        basis = _gradient_basis(xn, yn)
 
-        # Distance squared: (num_coils, size, size)
-        r_sq = (gx - cx) ** 2 + (gy - cy) ** 2
-
-        # Softening epsilon to avoid division by zero (0.1 mm)
-        eps_sq = 0.01
-
-        # Simplified Biot-Savart: field ∝ 1/r²
-        influence = self.config.field_scale_factor / (r_sq + eps_sq)
+        # Cycle through basis patterns for num_coils coils
+        # (if num_coils > 8 the basis repeats — fine for testing)
+        patterns = [basis[c % len(basis)] for c in range(self.num_coils)]
+        influence = np.stack(patterns, axis=0) * self.config.field_scale_factor
 
         return influence.astype(np.float32)
 
@@ -95,15 +140,13 @@ class ShimCoilArray:
         influence_tensor: "torch.Tensor",  # noqa: F821
     ) -> "torch.Tensor":  # noqa: F821
         """
-        PyTorch version for differentiable training.
+        PyTorch differentiable version.
 
         Args:
-            currents: (batch, num_coils) torch tensor on device.
-            influence_tensor: (num_coils, size, size) tensor on device.
+            currents: (B, num_coils) tensor on the training device.
+            influence_tensor: pre-baked (num_coils, H, W) on the same device.
 
         Returns:
-            (batch, size, size) corrective field tensor.
+            (B, H, W) coil field tensor.
         """
-        import torch  # local import keeps physics module torch-free when not needed
-
         return torch.einsum("bc,cij->bij", currents, influence_tensor)
