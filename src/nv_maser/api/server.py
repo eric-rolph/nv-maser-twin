@@ -5,12 +5,47 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from starlette.requests import Request
+from starlette.responses import PlainTextResponse
+import logging
+import threading
 import numpy as np
 import torch
 import time
 from ..config import SimConfig
 from ..physics.environment import FieldEnvironment
 from ..model.controller import build_controller
+
+logger = logging.getLogger("nv_maser.api")
+
+
+class _Metrics:
+    """Thread-safe request counters and latency accumulator."""
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self.shim_requests_total: int = 0
+        self.shim_errors_total: int = 0
+        self.shim_latency_ms_sum: float = 0.0
+        self.shim_latency_ms_count: int = 0
+
+    def record_shim(self, latency_ms: float, error: bool = False) -> None:
+        with self._lock:
+            self.shim_requests_total += 1
+            if error:
+                self.shim_errors_total += 1
+            else:
+                self.shim_latency_ms_sum += latency_ms
+                self.shim_latency_ms_count += 1
+
+    def avg_latency_ms(self) -> float:
+        with self._lock:
+            if self.shim_latency_ms_count == 0:
+                return 0.0
+            return self.shim_latency_ms_sum / self.shim_latency_ms_count
+
+
+_metrics = _Metrics()
+
 
 # Global state
 _env: FieldEnvironment | None = None
@@ -35,6 +70,14 @@ async def lifespan(app: FastAPI):
         state_dict = saved.get("model_state", saved) if isinstance(saved, dict) else saved
         _model.load_state_dict(state_dict)
     _model.eval()
+    logger.info(
+        "NV Maser API ready | grid=%dx%d | coils=%d | arch=%s | checkpoint=%s",
+        _config.grid.size,
+        _config.grid.size,
+        _config.coils.num_coils,
+        _config.model.architecture.value,
+        "loaded" if ckpt.exists() else "random-init",
+    )
     yield
     # Teardown (nothing needed)
 
@@ -100,14 +143,17 @@ async def health():
 @app.post("/shim", response_model=ShimResponse)
 async def shim(req: FieldRequest):
     if _model is None:
+        _metrics.record_shim(0.0, error=True)
         raise HTTPException(status_code=503, detail="Model not loaded")
 
     if len(req.distorted_field) != _config.grid.size:
+        _metrics.record_shim(0.0, error=True)
         raise HTTPException(
             status_code=422,
             detail=f"Field must be {_config.grid.size}\u00d7{_config.grid.size}",
         )
     if any(len(row) != _config.grid.size for row in req.distorted_field):
+        _metrics.record_shim(0.0, error=True)
         raise HTTPException(
             status_code=422,
             detail=f"All rows must have {_config.grid.size} columns",
@@ -115,8 +161,10 @@ async def shim(req: FieldRequest):
 
     field = np.array(req.distorted_field, dtype=np.float32)
     if not np.isfinite(field).all():
+        _metrics.record_shim(0.0, error=True)
         raise HTTPException(status_code=422, detail="Field contains NaN or Inf values")
     if field.shape != (_config.grid.size, _config.grid.size):
+        _metrics.record_shim(0.0, error=True)
         raise HTTPException(
             status_code=422,
             detail=f"Field must be {_config.grid.size}x{_config.grid.size}",
@@ -127,6 +175,7 @@ async def shim(req: FieldRequest):
     with torch.no_grad():
         currents = _model(x).squeeze(0).numpy()
     inference_ms = (time.perf_counter() - t0) * 1000
+    _metrics.record_shim(inference_ms)
 
     # Compute corrected field
     coil_field = _env.coils.compute_field(currents)
@@ -142,3 +191,21 @@ async def shim(req: FieldRequest):
         ),
         inference_ms=inference_ms,
     )
+
+
+@app.get("/metrics", response_class=PlainTextResponse)
+async def metrics() -> str:
+    """Prometheus-compatible plain-text metrics."""
+    avg_lat = _metrics.avg_latency_ms()
+    lines = [
+        "# HELP nv_maser_shim_requests_total Total /shim requests",
+        "# TYPE nv_maser_shim_requests_total counter",
+        f"nv_maser_shim_requests_total {_metrics.shim_requests_total}",
+        "# HELP nv_maser_shim_errors_total Total /shim errors (503+422)",
+        "# TYPE nv_maser_shim_errors_total counter",
+        f"nv_maser_shim_errors_total {_metrics.shim_errors_total}",
+        "# HELP nv_maser_shim_latency_ms_avg Average /shim inference latency (ms)",
+        "# TYPE nv_maser_shim_latency_ms_avg gauge",
+        f"nv_maser_shim_latency_ms_avg {avg_lat:.4f}",
+    ]
+    return "\n".join(lines) + "\n"

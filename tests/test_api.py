@@ -152,3 +152,36 @@ def test_security_headers_present(client):
     """GET /health response includes X-Content-Type-Options: nosniff."""
     r = client.get("/health")
     assert r.headers.get("x-content-type-options") == "nosniff"
+
+
+# ---------------------------------------------------------------------------
+# /metrics tests
+# ---------------------------------------------------------------------------
+
+def test_metrics_endpoint_ok(client):
+    """GET /metrics returns HTTP 200."""
+    r = client.get("/metrics")
+    assert r.status_code == 200
+
+
+def test_metrics_format(client):
+    """GET /metrics response contains Prometheus-style nv_maser_shim_requests_total line."""
+    r = client.get("/metrics")
+    assert "nv_maser_shim_requests_total" in r.text
+
+
+def test_metrics_counts_requests(client):
+    """After a valid /shim call, shim_requests_total in /metrics is >= 1.
+
+    The client fixture is module-scoped so counts accumulate — use >= not ==.
+    """
+    client.post("/shim", json=_make_field())
+    r = client.get("/metrics")
+    assert r.status_code == 200
+    for line in r.text.splitlines():
+        if line.startswith("nv_maser_shim_requests_total "):
+            value = int(line.split()[-1])
+            assert value >= 1
+            break
+    else:
+        pytest.fail("nv_maser_shim_requests_total not found in /metrics output")

@@ -1,5 +1,5 @@
-# NV Maser Digital Twin — default simulation parameters
-# Override any value by passing --config path/to/override.yaml to the CLI
+# NV Maser Digital Twin — default configuration
+# Override any value and pass with: python -m nv_maser train --config config/default.yaml
 
 grid:
   size: 64
@@ -25,19 +25,21 @@ coils:
   field_scale_factor: 1.0e-4
 
 model:
-  architecture: cnn
+  architecture: cnn       # cnn | mlp | lstm
   cnn_channels: [16, 32, 64]
   cnn_kernel_size: 3
   mlp_hidden_dims: [512, 256, 128]
+  lstm_hidden_size: 256
+  lstm_num_layers: 2
   dropout: 0.1
-  activation: relu
+  activation: relu        # relu | gelu | silu
 
 training:
   num_samples: 10000
   batch_size: 64
   epochs: 50
   learning_rate: 0.001
-  lr_scheduler: cosine
+  lr_scheduler: cosine    # cosine | step | none
   lr_step_size: 15
   lr_gamma: 0.5
   weight_decay: 1.0e-5

@@ -1,0 +1,17 @@
+.git/
+.venv/
+.pytest_cache/
+__pycache__/
+*.pyc
+*.pyo
+.coverage
+coverage.xml
+checkpoints/
+notebooks/
+training_curves.png
+tests/
+benchmarks/
+scripts/
+docs/
+*.md
+.gitignore
