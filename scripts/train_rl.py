@@ -199,13 +199,38 @@ def main() -> None:
     )
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--lr", type=float, default=3e-4)
-    parser.add_argument("--log-interval", type=int, default=20)
+    parser.add_argument("--log-interval", type=int, default=20, dest="log_interval",
+                        help="Log every N episodes.")
+    parser.add_argument(
+        "--config",
+        type=str,
+        default=None,
+        metavar="YAML",
+        help="Path to YAML file with SimConfig overrides (merged with defaults).",
+    )
     args = parser.parse_args()
+
+    from nv_maser.config import SimConfig
+    import yaml as _yaml
+
+    cfg = SimConfig()
+    if args.config:
+        with open(args.config) as _f:
+            _overrides = _yaml.safe_load(_f)
+        _merged = cfg.model_dump()
+        for k, v in (_overrides or {}).items():
+            if k in _merged and isinstance(_merged[k], dict) and isinstance(v, dict):
+                _merged[k].update(v)
+            else:
+                _merged[k] = v
+        cfg = SimConfig(**_merged)
+    # CLI arch wins over YAML; fall back to config default
+    arch = args.arch or cfg.model.architecture.value
 
     results = train(
         episodes=args.episodes,
         steps_per_episode=args.steps,
-        arch=args.arch,
+        arch=arch,
         seed=args.seed,
         lr=args.lr,
         log_interval=args.log_interval,

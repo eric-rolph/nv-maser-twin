@@ -97,6 +97,19 @@ def cmd_visualize_coils(config: SimConfig) -> None:
     plt.show()
 
 
+def cmd_dataset(config: SimConfig, args) -> None:
+    from .data.dataset import build_dataset
+
+    num_samples = args.num_samples or config.training.num_samples
+    ds = build_dataset(
+        config,
+        num_samples=num_samples,
+        cache_dir=args.cache_dir,
+        force_rebuild=args.force_rebuild,
+    )
+    print(f"[dataset] Built dataset with {len(ds)} samples -> {args.cache_dir}/")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="NV Maser Digital Twin")
     parser.add_argument(
@@ -117,6 +130,14 @@ def main() -> None:
     subparsers.add_parser("demo", help="Run the real-time dashboard")
     subparsers.add_parser("evaluate", help="Evaluate on test disturbances")
     subparsers.add_parser("visualize-coils", help="Plot coil influence matrix")
+
+    dataset_parser = subparsers.add_parser("dataset", help="Build and cache training dataset")
+    dataset_parser.add_argument("--num-samples", type=int, default=None,
+                                 help="Number of samples (overrides config)")
+    dataset_parser.add_argument("--cache-dir", type=str, default="dataset_cache",
+                                 help="Directory for cached .npz files")
+    dataset_parser.add_argument("--force-rebuild", action="store_true",
+                                 help="Ignore cache and rebuild from scratch")
 
     serve_parser = subparsers.add_parser("serve", help="Launch FastAPI inference server")
     serve_parser.add_argument(
@@ -149,6 +170,10 @@ def main() -> None:
         config.training.epochs = args.epochs
     if args.samples:
         config.training.num_samples = args.samples
+
+    if args.command == "dataset":
+        cmd_dataset(config, args)
+        return
 
     if args.command == "serve":
         import uvicorn
