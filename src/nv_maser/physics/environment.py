@@ -31,7 +31,7 @@ class FieldEnvironment:
     def __init__(self, config: SimConfig, thermal_seed: int | None = None) -> None:
         self.config = config
         self.grid = SpatialGrid(config.grid)
-        self.base_field = compute_base_field(self.grid, config.field)
+        self.base_field = compute_base_field(self.grid, config.field, config.halbach)
         self.disturbance_gen = DisturbanceGenerator(self.grid, config.disturbance)
         self.coils = ShimCoilArray(self.grid, config.coils)
 

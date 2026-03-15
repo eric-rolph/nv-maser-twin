@@ -46,6 +46,112 @@ class FieldConfig(BaseModel):
     )
 
 
+class HalbachConfig(BaseModel):
+    """Halbach permanent magnet array geometry and tolerances.
+
+    Models a K=2 (dipole) Halbach cylinder built from N discrete magnets.
+    The field inside has:
+    - Dominant dipolar term B₀ from geometry
+    - Systematic segmentation harmonics at orders kN±1
+    - Random multipole errors from manufacturing tolerances
+
+    The multipole expansion in 2D:
+        B(x,y) = B₀ + Σ_n [a_n·cos(nθ) + b_n·sin(nθ)]·(r/r_in)^(n-1)
+
+    where (r,θ) are polar coordinates relative to the bore center.
+    """
+
+    enabled: bool = Field(
+        False,
+        description=(
+            "Enable Halbach multipole model. When False, the flat B₀ + "
+            "optional gradient from FieldConfig is used (backward compatible)."
+        ),
+    )
+
+    # ── Array geometry ─────────────────────────────────────────────
+    num_segments: int = Field(
+        8,
+        ge=4,
+        le=48,
+        description=(
+            "Number of discrete permanent magnet segments. "
+            "8 is common for compact designs; 16-24 for high homogeneity."
+        ),
+    )
+    inner_radius_mm: float = Field(
+        7.0,
+        gt=0,
+        description="Bore inner radius (mm). Must be > physical_extent_mm / 2.",
+    )
+    outer_radius_mm: float = Field(
+        15.0,
+        gt=0,
+        description="Outer shell radius (mm). Larger ratio → stronger field.",
+    )
+    remanence_tesla: float = Field(
+        1.4,
+        gt=0,
+        description="NdFeB remanence Br (Tesla). N52: ~1.4 T, N42: ~1.3 T.",
+    )
+
+    # ── Multipole expansion ───────────────────────────────────────
+    max_multipole_order: int = Field(
+        12,
+        ge=2,
+        le=32,
+        description=(
+            "Highest multipole order in the expansion. "
+            "Orders kN±1 carry the segmentation harmonics; "
+            "higher orders fall off as (r/r_in)^(n-1)."
+        ),
+    )
+
+    # ── Manufacturing tolerances (stochastic errors) ──────────────
+    br_tolerance_pct: float = Field(
+        1.0,
+        ge=0.0,
+        description=(
+            "RMS segment-to-segment remanence variation (% of Br). "
+            "Grade-sorted N52: ~0.5-1%. Unsorted: 2-5%."
+        ),
+    )
+    angle_tolerance_deg: float = Field(
+        0.5,
+        ge=0.0,
+        description=(
+            "RMS magnetisation angle error per segment (degrees). "
+            "Precision magnetised: 0.5°. Standard: 1-2°."
+        ),
+    )
+    position_tolerance_mm: float = Field(
+        0.05,
+        ge=0.0,
+        description=(
+            "RMS segment radial position error (mm). "
+            "Precision assembly: 0.02-0.05 mm. Hand assembly: 0.1-0.3 mm."
+        ),
+    )
+
+    seed: int | None = Field(
+        None,
+        description="Random seed for manufacturing tolerance realisation.",
+    )
+
+    @property
+    def ideal_b0_tesla(self) -> float:
+        """Nominal B₀ from ideal Halbach dipole formula with segmentation correction.
+
+        B₀ = Br × ln(R_out/R_in) × sin(π/N)/(π/N)
+        """
+        import math
+
+        n = self.num_segments
+        geo = math.log(self.outer_radius_mm / self.inner_radius_mm)
+        seg_factor = math.sin(math.pi / n) / (math.pi / n) if n > 0 else 1.0
+        return self.remanence_tesla * geo * seg_factor
+
+
 class DisturbanceConfig(BaseModel):
     """Interference generator parameters."""
 
@@ -438,6 +544,7 @@ class SimConfig(BaseModel):
 
     grid: GridConfig = GridConfig()
     field: FieldConfig = FieldConfig()
+    halbach: HalbachConfig = HalbachConfig()
     disturbance: DisturbanceConfig = DisturbanceConfig()
     coils: CoilConfig = CoilConfig()
     nv: NVConfig = NVConfig()

@@ -10,6 +10,18 @@ field:
   b0_tesla: 0.05
   b0_gradient_ppm_per_mm: 0.0
 
+halbach:
+  enabled: false                # set true to use multipole Halbach model
+  num_segments: 8               # discrete magnets (8 common, 16-24 for precision)
+  inner_radius_mm: 7.0          # bore radius (> physical_extent_mm / 2)
+  outer_radius_mm: 15.0         # outer shell radius
+  remanence_tesla: 1.4          # N52 NdFeB Br
+  max_multipole_order: 12       # highest harmonic in expansion
+  br_tolerance_pct: 1.0         # ±% segment Br variation (grade-sorted)
+  angle_tolerance_deg: 0.5      # ±° magnetisation angle error
+  position_tolerance_mm: 0.05   # ±mm segment position error
+  seed: 42                      # reproducible manufacturing realisation
+
 disturbance:
   num_modes: 5
   max_amplitude_tesla: 0.005
