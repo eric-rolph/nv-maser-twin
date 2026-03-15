@@ -234,6 +234,102 @@ class TrainingConfig(BaseModel):
     )
 
 
+class FeedbackConfig(BaseModel):
+    """Closed-loop feedback hardware parameters."""
+
+    # ── Hall sensor ────────────────────────────────────────────────
+    sensor_noise_tesla: float = Field(
+        1e-7,
+        ge=0,
+        description=(
+            "RMS noise floor of Hall-effect sensors (Tesla). "
+            "Typical AH49E: ~100 nT. High-end MLX90395: ~10 nT. "
+            "Default 100 nT is conservative."
+        ),
+    )
+    num_sensors: int = Field(
+        4,
+        ge=1,
+        le=64,
+        description=(
+            "Number of point Hall sensors in the active zone. "
+            "Sensors provide sparse field measurements for the controller."
+        ),
+    )
+    sensor_bandwidth_hz: float = Field(
+        1000.0,
+        gt=0,
+        description="Sensor measurement bandwidth (Hz). Limits update rate.",
+    )
+
+    # ── DAC (Digital-to-Analog Converter) ──────────────────────────
+    dac_bits: int = Field(
+        16,
+        ge=8,
+        le=24,
+        description=(
+            "DAC resolution in bits. Determines current quantization. "
+            "16-bit over ±1A → step = 30.5 μA."
+        ),
+    )
+    dac_settling_time_us: float = Field(
+        10.0,
+        ge=0,
+        description="DAC settling time (μs). Adds latency to control loop.",
+    )
+
+    # ── Coil electrical dynamics ───────────────────────────────────
+    coil_inductance_uh: float = Field(
+        100.0,
+        ge=0,
+        description=(
+            "Coil inductance (μH). Flex polyimide micro-coils: 10-500 μH. "
+            "Combined with resistance, sets the L/R time constant."
+        ),
+    )
+    coil_resistance_ohm: float = Field(
+        5.0,
+        gt=0,
+        description="Coil DC resistance (Ω). Flex polyimide: 1-20 Ω.",
+    )
+
+    # ── Control loop timing ───────────────────────────────────────
+    control_loop_period_us: float = Field(
+        1000.0,
+        gt=0,
+        description=(
+            "Control loop period (μs). How often the NN runs. "
+            "1000 μs = 1 kHz update rate."
+        ),
+    )
+    computation_latency_us: float = Field(
+        100.0,
+        ge=0,
+        description=(
+            "NN inference + data transfer latency (μs). "
+            "CNN on MCU: ~100-500 μs. On FPGA: ~10 μs."
+        ),
+    )
+
+    @property
+    def dac_lsb_amps(self) -> float:
+        """Current step size for DAC quantization."""
+        # Full range is ±max_current, so 2×max / 2^bits
+        # We use 2.0 as the range (±1A default), but this is
+        # referenced externally with the actual max_current.
+        return 2.0 / (2**self.dac_bits)
+
+    @property
+    def coil_time_constant_us(self) -> float:
+        """L/R time constant (μs)."""
+        return self.coil_inductance_uh / self.coil_resistance_ohm
+
+    @property
+    def total_loop_latency_us(self) -> float:
+        """Total latency: computation + DAC settling."""
+        return self.computation_latency_us + self.dac_settling_time_us
+
+
 class VizConfig(BaseModel):
     """Visualization parameters."""
 
@@ -257,6 +353,7 @@ class SimConfig(BaseModel):
     coils: CoilConfig = CoilConfig()
     nv: NVConfig = NVConfig()
     maser: MaserConfig = MaserConfig()
+    feedback: FeedbackConfig = FeedbackConfig()
     model: ModelConfig = ModelConfig()
     training: TrainingConfig = TrainingConfig()
     viz: VizConfig = VizConfig()

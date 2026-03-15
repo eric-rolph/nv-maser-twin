@@ -37,6 +37,17 @@ maser:
   cavity_frequency_ghz: 1.47   # D - γe·B₀ = 2.87 - 28.025×0.05 ≈ 1.47 GHz
   min_gain_budget: 0.5         # maser needs ≥50% of peak gain
 
+feedback:
+  sensor_noise_tesla: 1.0e-7   # 100 nT Hall sensor noise (conservative)
+  num_sensors: 4               # sparse 2×2 sensor grid in active zone
+  sensor_bandwidth_hz: 1000.0  # 1 kHz measurement update rate
+  dac_bits: 16                 # 16-bit → 30.5 μA step @ ±1A
+  dac_settling_time_us: 10.0   # DAC output settling delay
+  coil_inductance_uh: 100.0    # flex polyimide micro-coil
+  coil_resistance_ohm: 5.0     # → τ = L/R = 20 μs
+  control_loop_period_us: 1000.0  # 1 kHz control loop
+  computation_latency_us: 100.0   # NN inference on MCU
+
 model:
   architecture: cnn       # cnn | mlp | lstm
   cnn_channels: [16, 32, 64]
