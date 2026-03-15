@@ -1,7 +1,10 @@
 """FastAPI inference server for real-time field shimming."""
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+from starlette.requests import Request
 import numpy as np
 import torch
 import time
@@ -38,6 +41,32 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="NV Maser Shim API", version="1.0.0", lifespan=lifespan)
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost", "http://localhost:8000", "http://127.0.0.1:8000"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type"],
+)
+
+MAX_BODY_BYTES = 1 * 1024 * 1024  # 1 MB
+
+
+@app.middleware("http")
+async def limit_request_size(request: Request, call_next):
+    content_length = request.headers.get("content-length")
+    if content_length and int(content_length) > MAX_BODY_BYTES:
+        return JSONResponse(status_code=413, content={"detail": "Request body too large"})
+    return await call_next(request)
+
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
 
 class FieldRequest(BaseModel):
     distorted_field: list[list[float]] = Field(
@@ -73,7 +102,20 @@ async def shim(req: FieldRequest):
     if _model is None:
         raise HTTPException(status_code=503, detail="Model not loaded")
 
+    if len(req.distorted_field) != _config.grid.size:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Field must be {_config.grid.size}\u00d7{_config.grid.size}",
+        )
+    if any(len(row) != _config.grid.size for row in req.distorted_field):
+        raise HTTPException(
+            status_code=422,
+            detail=f"All rows must have {_config.grid.size} columns",
+        )
+
     field = np.array(req.distorted_field, dtype=np.float32)
+    if not np.isfinite(field).all():
+        raise HTTPException(status_code=422, detail="Field contains NaN or Inf values")
     if field.shape != (_config.grid.size, _config.grid.size):
         raise HTTPException(
             status_code=422,

@@ -69,10 +69,7 @@ class StochasticShimmingPolicy(nn.Module):
         log_prob = dist.log_prob(raw_sample).sum(-1)   # (batch,)
         # Clip to [-max_current, max_current] — the base already constrains mean
         # via tanh, so we use the same scale for the clamp bounds
-        max_current = float(std.detach().abs().max().item()) * 0  # placeholder
-        # Retrieve max_current from the base model
-        _base = self.base
-        max_c = getattr(_base, "max_current", 1.0)
+        max_c = getattr(self.base, "max_current", 1.0)
         action_sample = raw_sample.clamp(-max_c, max_c)
         return action_sample, log_prob
 

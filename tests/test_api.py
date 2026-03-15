@@ -118,3 +118,37 @@ def test_shim_wrong_shape_422(client):
     """POST /shim with a 32×32 field returns HTTP 422 (wrong dimensions)."""
     r = client.post("/shim", json=_make_field(rows=32, cols=32))
     assert r.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# Security hardening tests
+# ---------------------------------------------------------------------------
+
+def test_oversized_field_dimension_422(client):
+    """POST /shim with a 65×64 field (wrong outer dimension) → 422."""
+    r = client.post("/shim", json=_make_field(rows=65, cols=64))
+    assert r.status_code == 422
+
+
+def test_nan_field_422(client):
+    """POST /shim with a 64×64 field containing NaN → 422.
+
+    Uses allow_nan=True + raw content because Python's json.dumps raises
+    ValueError for NaN by default, but json.loads (server-side) accepts the
+    bare NaN token, so our server-side isfinite check must catch it.
+    """
+    import json as _json
+
+    field = np.full((64, 64), 0.0).tolist()
+    field[0][0] = float("nan")
+    raw = _json.dumps({"distorted_field": field}, allow_nan=True).encode()
+    r = client.post(
+        "/shim", content=raw, headers={"Content-Type": "application/json"}
+    )
+    assert r.status_code == 422
+
+
+def test_security_headers_present(client):
+    """GET /health response includes X-Content-Type-Options: nosniff."""
+    r = client.get("/health")
+    assert r.headers.get("x-content-type-options") == "nosniff"
