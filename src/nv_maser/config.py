@@ -136,6 +136,14 @@ class TrainingConfig(BaseModel):
         0.01,
         description="L2 penalty weight on coil currents to prefer minimal corrections",
     )
+    auto_export_onnx: bool = Field(
+        False,
+        description="Automatically export ONNX model after training completes",
+    )
+    onnx_export_path: str = Field(
+        "checkpoints/model.onnx",
+        description="Output path for automatic ONNX export",
+    )
 
 
 class VizConfig(BaseModel):

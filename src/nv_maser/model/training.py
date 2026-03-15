@@ -215,6 +215,13 @@ class Trainer:
                         "model_state": self.model.state_dict(),
                         "optimizer_state": self.optimizer.state_dict(),
                         "val_loss": epoch_val_loss,
+                        "meta": {
+                            "arch": self.config.model.architecture.value,
+                            "grid_size": self.config.grid.size,
+                            "num_coils": self.config.coils.num_coils,
+                            "epochs_trained": epoch + 1,
+                            "best_val_loss": epoch_val_loss,
+                        },
                     },
                     ckpt_dir / "best.pt",
                 )
@@ -231,6 +238,22 @@ class Trainer:
             self._tracker.finish_run(self._run_id, best_val_loss=self.best_val_loss)
 
         print(f"[Trainer] Best val loss: {self.best_val_loss:.4e}")
+
+        if self.config.training.auto_export_onnx:
+            try:
+                from ..export import export_model
+                result = export_model(
+                    self.config,
+                    output_path=self.config.training.onnx_export_path,
+                    checkpoint_path=Path(self.config.training.checkpoint_dir) / "best.pt",
+                )
+                print(
+                    f"[Trainer] ONNX exported \u2192 {result.path} "
+                    f"(opset={result.opset})"
+                )
+            except Exception as exc:  # pragma: no cover
+                print(f"[Trainer] ONNX export skipped: {exc}")
+
         return history
 
     def load_best(self) -> None:
@@ -239,3 +262,26 @@ class Trainer:
         checkpoint = torch.load(ckpt_path, map_location=self.device)
         self.model.load_state_dict(checkpoint["model_state"])
         print(f"[Trainer] Loaded best model from epoch {checkpoint['epoch']+1}")
+
+
+def load_checkpoint_meta(checkpoint_path: "str | Path") -> dict:
+    """
+    Load only the metadata from a checkpoint without loading model weights.
+
+    Returns the ``meta`` dict if present, otherwise infers basic info from
+    the checkpoint keys.  Raises FileNotFoundError if the file does not exist.
+    """
+    ckpt = Path(checkpoint_path)
+    if not ckpt.exists():
+        raise FileNotFoundError(f"Checkpoint not found: {ckpt}")
+    saved = torch.load(ckpt, map_location="cpu", weights_only=False)
+    if "meta" in saved:
+        return dict(saved["meta"])
+    # Fallback: infer minimal info from state dict
+    return {
+        "epoch": saved.get("epoch"),
+        "best_val_loss": saved.get("val_loss"),
+        "arch": "unknown",
+        "grid_size": None,
+        "num_coils": None,
+    }

@@ -47,6 +47,8 @@ training:
   checkpoint_dir: checkpoints/
   early_stopping_patience: 10
   current_penalty_weight: 0.01
+  auto_export_onnx: false
+  onnx_export_path: "checkpoints/model.onnx"
 
 viz:
   update_interval_ms: 50

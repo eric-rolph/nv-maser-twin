@@ -200,6 +200,45 @@ def test_reload_no_checkpoint(client):
 
 
 # ---------------------------------------------------------------------------
+# /ui tests
+# ---------------------------------------------------------------------------
+
+def test_ui_returns_html(client):
+    """GET /ui returns HTTP 200 with text/html content-type and NV Maser title."""
+    r = client.get("/ui")
+    assert r.status_code == 200
+    assert "text/html" in r.headers.get("content-type", "")
+    assert "NV Maser" in r.text
+
+
+def test_ui_has_refresh_script(client):
+    """GET /ui response contains setInterval (confirms JS auto-refresh is present)."""
+    r = client.get("/ui")
+    assert r.status_code == 200
+    assert "setInterval" in r.text
+
+
+# ---------------------------------------------------------------------------
+# /info tests
+# ---------------------------------------------------------------------------
+
+def test_info_endpoint(client):
+    """GET /info returns HTTP 200 with expected JSON keys."""
+    r = client.get("/info")
+    assert r.status_code == 200
+    body = r.json()
+    for key in ("version", "arch", "grid_size", "num_coils", "onnx_available"):
+        assert key in body, f"Missing key: {key}"
+
+
+def test_info_arch_matches_health(client):
+    """GET /info arch field matches GET /health arch field."""
+    info = client.get("/info").json()
+    health = client.get("/health").json()
+    assert info["arch"] == health["arch"]
+
+
+# ---------------------------------------------------------------------------
 # /health enriched field tests
 # ---------------------------------------------------------------------------
 

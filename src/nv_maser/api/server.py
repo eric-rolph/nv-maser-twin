@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from starlette.requests import Request
-from starlette.responses import PlainTextResponse
+from starlette.responses import HTMLResponse, PlainTextResponse
 import logging
 import threading
 import numpy as np
@@ -14,6 +14,42 @@ import time
 from ..config import SimConfig
 from ..physics.environment import FieldEnvironment
 from ..model.controller import build_controller
+import json as _json
+import os as _os
+
+
+class _JsonFormatter(logging.Formatter):
+    """Emit each log record as a single-line JSON object."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        payload: dict = {
+            "ts": self.formatTime(record, datefmt="%Y-%m-%dT%H:%M:%S"),
+            "level": record.levelname,
+            "logger": record.name,
+            "msg": record.getMessage(),
+        }
+        if record.exc_info:
+            payload["exc"] = self.formatException(record.exc_info)
+        return _json.dumps(payload)
+
+
+def _configure_logging() -> None:
+    """Configure root logging. JSON format when LOG_FORMAT=json env var is set."""
+    fmt = _os.environ.get("LOG_FORMAT", "text").lower()
+    handler = logging.StreamHandler()
+    if fmt == "json":
+        handler.setFormatter(_JsonFormatter())
+    else:
+        handler.setFormatter(
+            logging.Formatter("%(asctime)s %(levelname)s %(name)s — %(message)s")
+        )
+    root = logging.getLogger()
+    if not root.handlers:
+        root.addHandler(handler)
+    root.setLevel(logging.INFO)
+
+
+_configure_logging()
 
 logger = logging.getLogger("nv_maser.api")
 
@@ -228,6 +264,138 @@ class ReloadResponse(BaseModel):
     status: str
     checkpoint: str
     arch: str
+
+
+_DASHBOARD_HTML = """<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>NV Maser Status</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: monospace; background: #0d1117; color: #e6edf3; margin: 0; padding: 24px; }
+    h1 { color: #58a6ff; margin-bottom: 4px; }
+    .subtitle { color: #8b949e; font-size: 12px; margin-bottom: 24px; }
+    .card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 16px; margin: 12px 0; }
+    .badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; }
+    .ok { background: #238636; color: #fff; }
+    .err { background: #da3633; color: #fff; }
+    .label { color: #8b949e; font-size: 12px; }
+    .val { font-size: 22px; font-weight: bold; color: #e6edf3; }
+    .row { display: flex; gap: 24px; flex-wrap: wrap; }
+    .metric { min-width: 140px; }
+    .bar-bg { background: #21262d; border-radius: 4px; height: 8px; margin-top: 8px; }
+    .bar-fill { background: #238636; height: 8px; border-radius: 4px; transition: width 0.3s; }
+    .ts { color: #8b949e; font-size: 11px; text-align: right; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <h1>NV Maser Digital Twin</h1>
+  <div class="subtitle">Real-time inference server status</div>
+
+  <div class="card">
+    <div class="row" style="align-items:center;justify-content:space-between">
+      <div>Status: <span id="status-badge" class="badge ok">OK</span></div>
+      <div class="ts" id="last-update">Connecting...</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="label" style="margin-bottom:10px">Model Info</div>
+    <div class="row">
+      <div class="metric"><div class="label">Architecture</div><div class="val" id="arch">-</div></div>
+      <div class="metric"><div class="label">Grid Size</div><div class="val" id="grid">-</div></div>
+      <div class="metric"><div class="label">Coils</div><div class="val" id="coils">-</div></div>
+      <div class="metric"><div class="label">Uptime</div><div class="val" id="uptime">-</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="label" style="margin-bottom:10px">Shim Requests</div>
+    <div class="row">
+      <div class="metric"><div class="label">Total</div><div class="val" id="req-total">-</div></div>
+      <div class="metric"><div class="label">Errors</div><div class="val" id="req-errors">-</div></div>
+      <div class="metric"><div class="label">Avg Latency</div><div class="val" id="req-latency">-</div></div>
+    </div>
+    <div class="label" style="margin-top:12px">Success Rate</div>
+    <div class="bar-bg"><div class="bar-fill" id="success-bar" style="width:100%"></div></div>
+  </div>
+
+  <script>
+    function parseProm(text) {
+      const out = {};
+      text.split('\\n').forEach(line => {
+        if (line.startsWith('#') || !line.trim()) return;
+        const m = line.match(/^(\\S+?)(?:\\{[^}]*\\})?\\s+([\\d.]+)/);
+        if (m) out[m[1]] = parseFloat(m[2]);
+        const lm = line.match(/^\\S+\\{arch="([^"]+)"\\}/);
+        if (lm) out['_arch'] = lm[1];
+      });
+      return out;
+    }
+    async function refresh() {
+      try {
+        const [h, m] = await Promise.all([
+          fetch('/health').then(r => r.json()),
+          fetch('/metrics').then(r => r.text())
+        ]);
+        const p = parseProm(m);
+        document.getElementById('status-badge').textContent = h.status.toUpperCase();
+        document.getElementById('status-badge').className = 'badge ' + (h.status === 'ok' ? 'ok' : 'err');
+        document.getElementById('arch').textContent = h.arch || p['_arch'] || '-';
+        document.getElementById('grid').textContent = h.grid_size ? h.grid_size + 'x' + h.grid_size : '-';
+        document.getElementById('coils').textContent = h.coils ?? '-';
+        document.getElementById('uptime').textContent = h.uptime_s != null ? h.uptime_s + 's' : '-';
+        const total = p['nv_maser_shim_requests_total'] ?? 0;
+        const errors = p['nv_maser_shim_errors_total'] ?? 0;
+        const lat = p['nv_maser_shim_latency_ms_avg'] ?? 0;
+        document.getElementById('req-total').textContent = total;
+        document.getElementById('req-errors').textContent = errors;
+        document.getElementById('req-latency').textContent = lat.toFixed(3) + ' ms';
+        const pct = total > 0 ? Math.round(((total - errors) / total) * 100) : 100;
+        document.getElementById('success-bar').style.width = pct + '%';
+        document.getElementById('last-update').textContent = 'Updated: ' + new Date().toLocaleTimeString();
+      } catch(e) {
+        document.getElementById('status-badge').textContent = 'UNREACHABLE';
+        document.getElementById('status-badge').className = 'badge err';
+      }
+    }
+    refresh();
+    setInterval(refresh, 5000);
+  </script>
+</body>
+</html>"""
+
+
+@app.get("/ui", response_class=HTMLResponse, include_in_schema=False)
+async def dashboard():
+    """Minimal HTML status dashboard (auto-refreshes every 5 s)."""
+    return HTMLResponse(content=_DASHBOARD_HTML)
+
+
+class InfoResponse(BaseModel):
+    version: str
+    arch: str
+    grid_size: int
+    num_coils: int
+    onnx_available: bool
+
+
+@app.get("/info", response_model=InfoResponse)
+async def info():
+    """Static model/server info."""
+    try:
+        import onnxruntime  # noqa: F401
+        onnx_ok = True
+    except ImportError:
+        onnx_ok = False
+    return InfoResponse(
+        version="1.0.0",
+        arch=_config.model.architecture.value if _config else "unknown",
+        grid_size=_config.grid.size if _config else 0,
+        num_coils=_config.coils.num_coils if _config else 0,
+        onnx_available=onnx_ok,
+    )
 
 
 @app.post("/reload", response_model=ReloadResponse)
