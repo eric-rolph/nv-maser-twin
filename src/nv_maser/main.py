@@ -15,6 +15,23 @@ import argparse
 from .config import SimConfig
 
 
+def _deep_merge_config(base: SimConfig, overrides: dict) -> SimConfig:
+    """Deep merge YAML overrides on top of the default SimConfig.
+
+    Only keys present in *overrides* are changed; nested sub-configs are merged
+    field-by-field rather than completely replaced.  This means a YAML file that
+    only contains ``training.epochs: 10`` will not wipe out the rest of the
+    training defaults.
+    """
+    merged = base.model_dump()
+    for key, value in overrides.items():
+        if key in merged and isinstance(merged[key], dict) and isinstance(value, dict):
+            merged[key].update(value)
+        else:
+            merged[key] = value
+    return SimConfig(**merged)
+
+
 def cmd_train(config: SimConfig) -> None:
     from .model.training import Trainer
     from .viz.plots import plot_training_history
@@ -109,7 +126,7 @@ def main() -> None:
         with open(args.config) as f:
             overrides = yaml.safe_load(f)
         try:
-            config = SimConfig(**overrides)
+            config = _deep_merge_config(config, overrides)
         except ValidationError as e:
             print(f"Config validation error:\n{e}")
             raise SystemExit(1)
