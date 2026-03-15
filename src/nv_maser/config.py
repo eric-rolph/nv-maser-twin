@@ -293,6 +293,97 @@ class MaserConfig(BaseModel):
     )
 
 
+class CavityConfig(BaseModel):
+    """Microwave cavity geometry for threshold and Purcell calculations.
+
+    The zero-point magnetic field in the cavity mode sets the single-spin
+    coupling strength g₀ = γe · B_zpf.  Together with the cavity linewidth
+    κ = ω/Q and ensemble size, this determines the cooperativity
+    C = 4 g² N_eff / (κ · γ⊥) that must exceed 1 for masing.
+    """
+
+    mode_volume_cm3: float = Field(
+        0.5,
+        gt=0,
+        description=(
+            "Effective microwave mode volume (cm³). "
+            "TE₀₁₁ at ~1.5 GHz in 12 mm bore: ~0.3-1.0 cm³. "
+            "Smaller → stronger coupling."
+        ),
+    )
+    fill_factor: float = Field(
+        0.01,
+        gt=0,
+        le=1.0,
+        description=(
+            "Overlap fill factor V_diamond / V_mode. "
+            "Typical 0.005-0.05 for thin diamond in microwave cavity."
+        ),
+    )
+
+
+class OpticalPumpConfig(BaseModel):
+    """532 nm optical pump parameters for NV population inversion.
+
+    The pump laser drives the spin-selective intersystem crossing (ISC)
+    that polarises the NV⁻ ground state into |0⟩, creating the population
+    inversion needed for stimulated microwave emission.
+
+    Thermal load from the pump couples to the ThermalConfig model:
+    absorbed power × quantum defect heats the diamond.
+    """
+
+    laser_power_w: float = Field(
+        2.0,
+        ge=0,
+        description=(
+            "CW pump laser power at 532 nm (Watts). "
+            "Breeze et al. used ~4 W for CW masing. "
+            "2 W is a reasonable starting point for threshold estimates."
+        ),
+    )
+    laser_wavelength_nm: float = Field(
+        532.0,
+        gt=0,
+        description="Pump laser wavelength (nm). 532 nm standard for NV.",
+    )
+    beam_waist_mm: float = Field(
+        1.5,
+        gt=0,
+        description=(
+            "1/e² Gaussian beam waist radius (mm). "
+            "Determines peak intensity at diamond centre."
+        ),
+    )
+    absorption_cross_section_m2: float = Field(
+        3.1e-21,
+        gt=0,
+        description=(
+            "NV⁻ absorption cross-section at 532 nm (m²). "
+            "Literature: 3.1×10⁻²¹ m² (Wee et al. 2007)."
+        ),
+    )
+    quantum_defect_fraction: float = Field(
+        0.6,
+        ge=0,
+        le=1.0,
+        description=(
+            "Fraction of absorbed optical power converted to heat. "
+            "Accounts for Stokes shift + non-radiative decay. "
+            "0.5-0.7 typical for NV at 532 nm."
+        ),
+    )
+    spin_t1_ms: float = Field(
+        5.0,
+        gt=0,
+        description=(
+            "NV ground-state spin-lattice relaxation T₁ (ms). "
+            "Room temperature: 5-6 ms. Sets the decay rate competing "
+            "against optical pumping."
+        ),
+    )
+
+
 class SignalChainConfig(BaseModel):
     """RF signal chain parameters for SNR budget.
 
@@ -639,6 +730,8 @@ class SimConfig(BaseModel):
     nv: NVConfig = NVConfig()
     maser: MaserConfig = MaserConfig()
     signal_chain: SignalChainConfig = SignalChainConfig()
+    cavity: CavityConfig = CavityConfig()
+    optical_pump: OpticalPumpConfig = OpticalPumpConfig()
     feedback: FeedbackConfig = FeedbackConfig()
     thermal: ThermalConfig = ThermalConfig()
     model: ModelConfig = ModelConfig()

@@ -15,3 +15,17 @@ from .signal_chain import (  # noqa: F401
     compute_signal_chain_budget,
     compute_snr_vs_field_uniformity,
 )
+from .cavity import (  # noqa: F401
+    CavityProperties,
+    ThresholdResult,
+    compute_cavity_properties,
+    compute_maser_threshold,
+    compute_n_effective,
+    compute_full_threshold,
+)
+from .optical_pump import (  # noqa: F401
+    PumpState,
+    compute_pump_rate,
+    compute_absorbed_power,
+    compute_pump_state,
+)

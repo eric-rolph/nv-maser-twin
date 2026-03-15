@@ -15,6 +15,8 @@ from .coils import ShimCoilArray
 from .maser_gain import compute_maser_metrics, max_tolerable_b_std
 from .thermal import ThermalModel, ThermalState, compute_thermal_state
 from .signal_chain import compute_signal_chain_budget
+from .cavity import compute_cavity_properties, compute_full_threshold
+from .optical_pump import compute_pump_state
 
 
 class FieldEnvironment:
@@ -152,6 +154,24 @@ class FieldEnvironment:
         result["received_power_w"] = snr_budget.received_power_w
         result["total_noise_w"] = snr_budget.total_noise_w
         result["system_noise_temperature_k"] = snr_budget.system_noise_temperature_k
+
+        # Cavity QED threshold
+        gamma_eff_hz = maser["gamma_eff_ghz"] * 1e9  # GHz → Hz
+        threshold = compute_full_threshold(
+            nv_config, maser_config, self.config.cavity,
+            gain_budget, gamma_eff_hz,
+        )
+        result["cooperativity"] = threshold.cooperativity
+        result["threshold_margin"] = threshold.threshold_margin
+        result["n_effective"] = threshold.n_effective
+        result["ensemble_coupling_hz"] = threshold.ensemble_coupling_hz
+
+        # Optical pump
+        pump = compute_pump_state(self.config.optical_pump, nv_config)
+        result["pump_rate_hz"] = pump.pump_rate_hz
+        result["pump_saturation"] = pump.pump_saturation
+        result["effective_pump_efficiency"] = pump.effective_pump_efficiency
+        result["thermal_load_w"] = pump.thermal_load_w
 
         return result
 

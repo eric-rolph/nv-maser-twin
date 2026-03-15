@@ -60,6 +60,18 @@ feedback:
   control_loop_period_us: 1000.0  # 1 kHz control loop
   computation_latency_us: 100.0   # NN inference on MCU
 
+cavity:
+  mode_volume_cm3: 0.5               # TE011 at ~1.5 GHz in 12 mm bore
+  fill_factor: 0.01                  # V_diamond / V_mode
+
+optical_pump:
+  laser_power_w: 2.0                 # CW 532 nm pump laser
+  laser_wavelength_nm: 532.0         # standard NV pump wavelength
+  beam_waist_mm: 1.5                 # 1/e² Gaussian beam radius
+  absorption_cross_section_m2: 3.1e-21  # NV⁻ at 532 nm
+  quantum_defect_fraction: 0.6       # heat fraction of absorbed power
+  spin_t1_ms: 5.0                    # ground-state T₁ at room temp
+
 signal_chain:
   lna_noise_figure_db: 1.0           # room-temp GaAs LNA
   lna_gain_db: 30.0                  # LNA power gain
