@@ -107,7 +107,10 @@ class NVMaserDashboard(QtWidgets.QMainWindow):
         metrics_box = QtWidgets.QGroupBox("Metrics")
         metrics_layout = QtWidgets.QFormLayout(metrics_box)
         self._metric_labels: dict[str, QtWidgets.QLabel] = {}
-        for key in ("Field Std (μT)", "PPM", "Inference (ms)", "FPS"):
+        for key in (
+            "Field Std (μT)", "PPM", "Inference (ms)", "FPS",
+            "SNR (dB)", "Cooperativity", "Gain Budget", "Pump Saturation",
+        ):
             lbl = QtWidgets.QLabel("—")
             lbl.setStyleSheet("font-family: monospace; font-size: 14px;")
             metrics_layout.addRow(key + ":", lbl)
@@ -182,6 +185,10 @@ class NVMaserDashboard(QtWidgets.QMainWindow):
         self._metric_labels["PPM"].setText(f"{metrics['ppm']:.1f}")
         self._metric_labels["Inference (ms)"].setText(f"{infer_ms:.2f}")
         self._metric_labels["FPS"].setText(f"{fps:.0f}")
+        self._metric_labels["SNR (dB)"].setText(f"{metrics.get('snr_db', 0):.1f}")
+        self._metric_labels["Cooperativity"].setText(f"{metrics.get('cooperativity', 0):.3f}")
+        self._metric_labels["Gain Budget"].setText(f"{metrics.get('gain_budget', 0):.3f}")
+        self._metric_labels["Pump Saturation"].setText(f"{metrics.get('pump_saturation', 0):.3f}")
 
         # Update coil bar chart
         self._coil_bars.setOpts(height=currents_np)

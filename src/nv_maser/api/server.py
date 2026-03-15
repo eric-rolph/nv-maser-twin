@@ -154,12 +154,30 @@ class FieldRequest(BaseModel):
     )
 
 
+def _compute_physics_metrics(corrected_field: np.ndarray) -> dict:
+    """Compute physics metrics for the corrected field."""
+    if _env is None:
+        return {}
+    phys = _env.compute_uniformity_metric(corrected_field)
+    return {
+        "snr_db": phys.get("snr_db"),
+        "cooperativity": phys.get("cooperativity"),
+        "gain_budget": phys.get("gain_budget"),
+        "masing": phys.get("cooperativity", 0) > 1.0,
+    }
+
+
 class ShimResponse(BaseModel):
     currents: list[float]
     corrected_field_variance: float
     distorted_field_variance: float
     improvement_factor: float
     inference_ms: float
+    # Physics metrics
+    snr_db: float | None = None
+    cooperativity: float | None = None
+    gain_budget: float | None = None
+    masing: bool | None = None
 
 
 class HealthResponse(BaseModel):
@@ -233,6 +251,7 @@ async def shim(req: FieldRequest):
             np.var(field[mask]) / max(np.var(corrected[mask]), 1e-12)
         ),
         inference_ms=inference_ms,
+        **_compute_physics_metrics(corrected),
     )
 
 

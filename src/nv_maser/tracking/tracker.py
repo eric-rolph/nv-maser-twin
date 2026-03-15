@@ -82,8 +82,14 @@ class ExperimentTracker:
         epoch: int,
         train_loss: float,
         val_loss: float,
+        **extra: float,
     ) -> None:
-        """Append one epoch's metrics for the given run."""
+        """Append one epoch's metrics for the given run.
+
+        Extra keyword arguments (e.g. gain_budget, cooperativity) are
+        silently accepted for forward compatibility but not persisted
+        in the current schema.
+        """
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
                 """

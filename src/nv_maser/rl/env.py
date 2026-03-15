@@ -113,6 +113,17 @@ class ShimmingEnv:
         # Positive reward when variance decreases; negative when it worsens.
         reward = distorted_var - corrected_var
 
+        # Optional physics reward shaping: add gain_budget improvement
+        info: dict[str, float] = {"variance": corrected_var}
+        if self.config.training.reward_shaping:
+            phys = self._env.compute_uniformity_metric(corrected)
+            gain_budget = phys.get("gain_budget", 0.0)
+            info["gain_budget"] = gain_budget
+            info["cooperativity"] = phys.get("cooperativity", 0.0)
+            info["snr_db"] = phys.get("snr_db", 0.0)
+            # Reward shaping: bonus for improving gain budget
+            reward += self.config.training.reward_shaping_weight * gain_budget
+
         self._step_count += 1
         terminated = self._step_count >= self.max_steps
         truncated = False
@@ -120,7 +131,7 @@ class ShimmingEnv:
         self._current_field = corrected
         obs = corrected[np.newaxis, :, :].astype(np.float32)
 
-        return obs, reward, terminated, truncated, {"variance": corrected_var}
+        return obs, reward, terminated, truncated, info
 
     def render(self) -> None:  # noqa: D102
         pass

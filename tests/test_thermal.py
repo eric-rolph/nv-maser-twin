@@ -320,6 +320,7 @@ def test_env_effective_base_field_with_thermal_shift() -> None:
         disturbance={"seed": 42},
         thermal={"ambient_temperature_c": 45.0, "thermal_noise_std_c": 0.0,
                  "thermal_drift_rate_c_per_s": 0.0},
+        optical_pump={"laser_power_w": 0.0},  # no pump heating for this test
     )
     env = FieldEnvironment(cfg, thermal_seed=0)
     env.step(t=0.0)

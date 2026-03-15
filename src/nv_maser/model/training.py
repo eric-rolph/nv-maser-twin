@@ -14,7 +14,7 @@ from torch.optim.lr_scheduler import CosineAnnealingLR, StepLR
 from ..config import SimConfig
 from ..physics.environment import FieldEnvironment
 from .controller import build_controller
-from .loss import FieldUniformityLoss
+from .loss import FieldUniformityLoss, PhysicsInformedLoss
 
 
 class Trainer:
@@ -56,11 +56,20 @@ class Trainer:
             device=self.device,
         )
 
-        # Loss function
-        self.loss_fn = FieldUniformityLoss(
-            self.active_mask,
-            config.training.current_penalty_weight,
-        ).to(self.device)
+        # Loss function — select based on loss_type config
+        if config.training.loss_type == "physics":
+            self.loss_fn = PhysicsInformedLoss(
+                self.active_mask,
+                self.env,
+                config.training.current_penalty_weight,
+                config.training.gain_budget_penalty_weight,
+                config.training.cooperativity_penalty_weight,
+            ).to(self.device)
+        else:
+            self.loss_fn = FieldUniformityLoss(
+                self.active_mask,
+                config.training.current_penalty_weight,
+            ).to(self.device)
 
         # Optimizer
         self.optimizer = torch.optim.AdamW(
@@ -180,9 +189,10 @@ class Trainer:
             # ── Validation ────────────────────────────────────────────────
             self.model.eval()
             epoch_val_loss = 0.0
+            last_val_metrics: dict[str, float] = {}
             with torch.no_grad():
                 for (batch,) in val_loader:
-                    loss, _ = self._forward_step(batch)
+                    loss, last_val_metrics = self._forward_step(batch)
                     epoch_val_loss += loss.item()
             epoch_val_loss /= len(val_loader)
 
@@ -193,11 +203,19 @@ class Trainer:
             history["val_loss"].append(epoch_val_loss)
 
             if self._tracker is not None and self._run_id is not None:
+                log_kwargs: dict[str, float] = {
+                    "train_loss": epoch_train_loss,
+                    "val_loss": epoch_val_loss,
+                }
+                # Log physics metrics from last validation batch
+                for key in ("gain_budget", "cooperativity", "physics_penalty",
+                            "field_variance"):
+                    if key in last_val_metrics:
+                        log_kwargs[key] = last_val_metrics[key]
                 self._tracker.log_epoch(
                     self._run_id,
                     epoch=epoch + 1,
-                    train_loss=epoch_train_loss,
-                    val_loss=epoch_val_loss,
+                    **log_kwargs,
                 )
 
             print(

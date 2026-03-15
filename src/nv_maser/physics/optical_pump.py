@@ -112,6 +112,10 @@ def compute_pump_state(
     gamma_pump = compute_pump_rate(pump_config)
 
     # ── Saturation ────────────────────────────────────────────────
+    # NOTE: spin_t1_ms is treated as temperature-independent here.
+    # In reality T₁ shortens at elevated temperatures (Orbach process),
+    # which would reduce saturation.  A future refinement could accept
+    # T₁(T) from the thermal model.
     gamma_relax = 1.0 / (pump_config.spin_t1_ms * 1e-3)  # Hz
     saturation = gamma_pump / (gamma_pump + gamma_relax)
 

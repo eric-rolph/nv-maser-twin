@@ -150,6 +150,11 @@ class ThermalModel:
         """
         Compute temperature at time t (seconds).
 
+        T(t) = T_ambient + drift·t + noise(t) + P_heat × R_th
+
+        The external heat term models steady-state heating from the
+        optical pump (set via ThermalConfig.external_heat_w).
+
         Args:
             t: Time in seconds from simulation start.
 
@@ -162,7 +167,8 @@ class ThermalModel:
             if self.config.thermal_noise_std_c > 0
             else 0.0
         )
-        return self._base_temperature + drift + noise
+        heat_rise = self.config.external_heat_w * self.config.thermal_resistance_c_per_w
+        return self._base_temperature + drift + noise + heat_rise
 
     def state_at(
         self,

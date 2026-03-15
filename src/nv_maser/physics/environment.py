@@ -38,8 +38,17 @@ class FieldEnvironment:
         self.disturbance_gen = DisturbanceGenerator(self.grid, config.disturbance)
         self.coils = ShimCoilArray(self.grid, config.coils)
 
+        # Close pump → thermal loop: compute pump thermal load and inject
+        # into ThermalConfig before building the ThermalModel.
+        pump = compute_pump_state(config.optical_pump, config.nv)
+        thermal_cfg = config.thermal
+        if pump.thermal_load_w > 0 and thermal_cfg.external_heat_w == 0.0:
+            thermal_cfg = thermal_cfg.model_copy(
+                update={"external_heat_w": pump.thermal_load_w}
+            )
+
         # Thermal model (always created; at default 25°C → zero offset)
-        self.thermal_model = ThermalModel(config.thermal, seed=thermal_seed)
+        self.thermal_model = ThermalModel(thermal_cfg, seed=thermal_seed)
         self._thermal_state: ThermalState | None = None
 
         # Current state
@@ -145,7 +154,20 @@ class FieldEnvironment:
             result["temperature_c"] = self._thermal_state.temperature_c
             result["b0_shift_tesla"] = self._thermal_state.b0_shift_tesla
 
-        # Signal chain SNR budget
+        # Optical pump — compute FIRST so effective efficiency feeds
+        # into signal_chain and cavity calculations (closes pump→inversion loop).
+        pump = compute_pump_state(self.config.optical_pump, nv_config)
+        result["pump_rate_hz"] = pump.pump_rate_hz
+        result["pump_saturation"] = pump.pump_saturation
+        result["effective_pump_efficiency"] = pump.effective_pump_efficiency
+        result["thermal_load_w"] = pump.thermal_load_w
+
+        # Override pump_efficiency with the dynamic value from optical pump
+        nv_config = nv_config.model_copy(
+            update={"pump_efficiency": pump.effective_pump_efficiency}
+        )
+
+        # Signal chain SNR budget (now uses dynamic pump efficiency)
         gain_budget = maser["gain_budget"]
         snr_budget = compute_signal_chain_budget(
             nv_config, maser_config, self.config.signal_chain, gain_budget
@@ -155,7 +177,7 @@ class FieldEnvironment:
         result["total_noise_w"] = snr_budget.total_noise_w
         result["system_noise_temperature_k"] = snr_budget.system_noise_temperature_k
 
-        # Cavity QED threshold
+        # Cavity QED threshold (now uses dynamic pump efficiency)
         gamma_eff_hz = maser["gamma_eff_ghz"] * 1e9  # GHz → Hz
         threshold = compute_full_threshold(
             nv_config, maser_config, self.config.cavity,
@@ -165,13 +187,6 @@ class FieldEnvironment:
         result["threshold_margin"] = threshold.threshold_margin
         result["n_effective"] = threshold.n_effective
         result["ensemble_coupling_hz"] = threshold.ensemble_coupling_hz
-
-        # Optical pump
-        pump = compute_pump_state(self.config.optical_pump, nv_config)
-        result["pump_rate_hz"] = pump.pump_rate_hz
-        result["pump_saturation"] = pump.pump_saturation
-        result["effective_pump_efficiency"] = pump.effective_pump_efficiency
-        result["thermal_load_w"] = pump.thermal_load_w
 
         return result
 

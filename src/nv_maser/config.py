@@ -510,6 +510,35 @@ class TrainingConfig(BaseModel):
             "Rule of thumb: ≈ (field_scale_factor / max_current)² × 0.01."
         ),
     )
+    loss_type: str = Field(
+        "variance",
+        description=(
+            "Loss function type: 'variance' (original Var(B)+λ||I||²) or "
+            "'physics' (adds gain_budget + cooperativity penalty terms)."
+        ),
+    )
+    gain_budget_penalty_weight: float = Field(
+        0.1,
+        ge=0.0,
+        description="Weight α for 1/gain_budget penalty in physics loss.",
+    )
+    cooperativity_penalty_weight: float = Field(
+        0.1,
+        ge=0.0,
+        description="Weight β for max(0, 1−C) penalty in physics loss.",
+    )
+    reward_shaping: bool = Field(
+        False,
+        description=(
+            "Enable physics reward shaping in RL environment. "
+            "Adds gain_budget improvement to variance-based reward."
+        ),
+    )
+    reward_shaping_weight: float = Field(
+        0.1,
+        ge=0.0,
+        description="Weight γ for gain_budget term in shaped RL reward.",
+    )
     auto_export_onnx: bool = Field(
         False,
         description="Automatically export ONNX model after training completes",
@@ -696,6 +725,26 @@ class ThermalConfig(BaseModel):
             "Standard deviation of fast temperature fluctuations (°C). "
             "Models short-term noise on top of drift. "
             "Well-controlled: 0.01 °C. Moderate: 0.1 °C."
+        ),
+    )
+
+    # ── External heat source (pump → thermal coupling) ─────────────
+    external_heat_w: float = Field(
+        0.0,
+        ge=0.0,
+        description=(
+            "External heat deposited into the diamond (Watts). "
+            "Set from optical pump thermal_load_w to close the "
+            "pump → thermal feedback loop. 0 = backward compatible."
+        ),
+    )
+    thermal_resistance_c_per_w: float = Field(
+        5.0,
+        gt=0.0,
+        description=(
+            "Thermal resistance from diamond to heat sink (°C/W). "
+            "Determines steady-state temperature rise from pump heating: "
+            "ΔT = P_heat × R_th. Typical 3-10 °C/W for diamond on Cu heat sink."
         ),
     )
 
