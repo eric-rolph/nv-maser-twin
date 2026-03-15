@@ -1,0 +1,39 @@
+[project]
+name = "nv-maser-twin"
+version = "0.1.0"
+description = "Digital Twin of an NV center maser active magnetic shimming system"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+    "torch>=2.0",
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "matplotlib>=3.7",
+    "pyqtgraph>=0.13",
+    "PyQt6>=6.5",
+    "pydantic>=2.0",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov",
+    "ipykernel",
+    "jupyter",
+]
+
+[project.scripts]
+nv-maser = "nv_maser.main:main"
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v"

@@ -1,0 +1,55 @@
+# NV Maser Digital Twin — default simulation parameters
+# Override any value by passing --config path/to/override.yaml to the CLI
+
+grid:
+  size: 64
+  physical_extent_mm: 10.0
+  active_zone_fraction: 0.6
+
+field:
+  b0_tesla: 0.05
+  b0_gradient_ppm_per_mm: 0.0
+
+disturbance:
+  num_modes: 5
+  max_amplitude_tesla: 0.005
+  min_spatial_freq: 0.5
+  max_spatial_freq: 4.0
+  temporal_drift_rate: 0.1
+  seed: null
+
+coils:
+  num_coils: 8
+  coil_radius_mm: 6.0
+  max_current_amps: 1.0
+  field_scale_factor: 1.0e-4
+
+model:
+  architecture: cnn
+  cnn_channels: [16, 32, 64]
+  cnn_kernel_size: 3
+  mlp_hidden_dims: [512, 256, 128]
+  dropout: 0.1
+  activation: relu
+
+training:
+  num_samples: 10000
+  batch_size: 64
+  epochs: 50
+  learning_rate: 0.001
+  lr_scheduler: cosine
+  lr_step_size: 15
+  lr_gamma: 0.5
+  weight_decay: 1.0e-5
+  val_split: 0.1
+  checkpoint_dir: checkpoints/
+  early_stopping_patience: 10
+  current_penalty_weight: 0.01
+
+viz:
+  update_interval_ms: 50
+  colormap: RdBu_r
+  show_coil_positions: true
+  field_range_tesla: [0.045, 0.055]
+
+device: auto

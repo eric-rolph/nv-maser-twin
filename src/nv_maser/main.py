@@ -1,0 +1,135 @@
+"""
+CLI entry point for the NV Maser Digital Twin.
+
+Usage::
+
+    python -m nv_maser train              # Train the shimming controller
+    python -m nv_maser demo               # Run the real-time dashboard with trained model
+    python -m nv_maser evaluate           # Run evaluation metrics on test disturbances
+    python -m nv_maser visualize-coils    # Show coil influence matrix plots
+"""
+from __future__ import annotations
+
+import argparse
+
+from .config import SimConfig
+
+
+def cmd_train(config: SimConfig) -> None:
+    from .model.training import Trainer
+    from .viz.plots import plot_training_history
+
+    trainer = Trainer(config)
+    history = trainer.train()
+    plot_training_history(history, save_path="training_curves.png")
+
+
+def cmd_demo(config: SimConfig) -> None:
+    from .model.training import Trainer
+    from .viz.dashboard import run_dashboard
+
+    trainer = Trainer(config)
+    trainer.load_best()
+    trainer.model.eval()
+    run_dashboard(trainer.env, trainer.model, trainer.influence_tensor, config)
+
+
+def cmd_evaluate(config: SimConfig) -> None:
+    import numpy as np
+    import torch
+    from .model.training import Trainer
+
+    trainer = Trainer(config)
+    trainer.load_best()
+    trainer.model.eval()
+
+    n_test = 500
+    print(f"\n[Evaluate] Generating {n_test} test disturbances…")
+    test_fields, _ = trainer.env.generate_training_data(n_test)
+    X = torch.tensor(test_fields, dtype=torch.float32).unsqueeze(1).to(trainer.device)
+
+    with torch.no_grad():
+        currents = trainer.model(X)
+        coil_fields = torch.einsum("bc,cij->bij", currents, trainer.influence_tensor)
+        net = X.squeeze(1) + coil_fields
+
+    mask = trainer.active_mask.cpu()
+    for label, field in [("Before correction", X.squeeze(1)), ("After correction", net)]:
+        active = field.cpu()[:, mask].numpy()
+        stds = np.std(active, axis=1)
+        print(f"\n  {label}:")
+        print(f"    Mean std:       {np.mean(stds):.2e} T")
+        print(f"    Median std:     {np.median(stds):.2e} T")
+        print(f"    Worst-case std: {np.max(stds):.2e} T")
+
+    before_stds = np.std(X.squeeze(1).cpu()[:, mask].numpy(), axis=1)
+    after_stds = np.std(net.cpu()[:, mask].numpy(), axis=1)
+    improvement = np.mean(before_stds) / np.mean(after_stds)
+    print(f"\n  Average improvement factor: {improvement:.1f}x")
+
+
+def cmd_visualize_coils(config: SimConfig) -> None:
+    import matplotlib.pyplot as plt
+    from .physics.environment import FieldEnvironment
+    from .viz.plots import plot_coil_influence, plot_disturbance_spectrum
+
+    env = FieldEnvironment(config)
+    plot_coil_influence(env.coils, save_path="coil_influence.png")
+    disturbance = env.disturbance_gen.generate()
+    plot_disturbance_spectrum(disturbance, save_path="disturbance_spectrum.png")
+    plt.show()
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="NV Maser Digital Twin")
+    parser.add_argument(
+        "command",
+        choices=["train", "demo", "evaluate", "visualize-coils"],
+    )
+    parser.add_argument(
+        "--config", type=str, default=None, help="Path to YAML config override"
+    )
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="auto",
+        choices=["auto", "cuda", "cpu"],
+    )
+    parser.add_argument("--arch", type=str, default=None, choices=["cnn", "mlp"])
+    parser.add_argument("--epochs", type=int, default=None)
+    parser.add_argument("--samples", type=int, default=None)
+    args = parser.parse_args()
+
+    config = SimConfig()
+
+    if args.config:
+        import yaml
+        from pydantic import ValidationError
+
+        with open(args.config) as f:
+            overrides = yaml.safe_load(f)
+        try:
+            config = SimConfig(**overrides)
+        except ValidationError as e:
+            print(f"Config validation error:\n{e}")
+            raise SystemExit(1)
+
+    config.device = args.device
+    if args.arch:
+        config.model.architecture = args.arch  # type: ignore[assignment]
+    if args.epochs:
+        config.training.epochs = args.epochs
+    if args.samples:
+        config.training.num_samples = args.samples
+
+    commands = {
+        "train": cmd_train,
+        "demo": cmd_demo,
+        "evaluate": cmd_evaluate,
+        "visualize-coils": cmd_visualize_coils,
+    }
+    commands[args.command](config)
+
+
+if __name__ == "__main__":
+    main()
