@@ -94,3 +94,7 @@ class DisturbanceGenerator:
             batch[i] = self.generate(t=0.0)
 
         return batch
+
+    def randomize(self) -> None:
+        """Re-randomize mode parameters (public interface for RL env reset)."""
+        self._init_modes()

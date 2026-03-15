@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 class ModelArchitecture(str, Enum):
     CNN = "cnn"
     MLP = "mlp"
+    LSTM = "lstm"
 
 
 class GridConfig(BaseModel):
@@ -108,6 +109,9 @@ class ModelConfig(BaseModel):
     )
     dropout: float = Field(0.1, ge=0.0, le=0.5)
     activation: str = Field("relu", description="Activation function: relu, gelu, silu")
+    # LSTM-specific
+    lstm_hidden_size: int = Field(256, description="Hidden state size for LSTM layers")
+    lstm_num_layers: int = Field(2, description="Number of LSTM layers")
 
 
 class TrainingConfig(BaseModel):

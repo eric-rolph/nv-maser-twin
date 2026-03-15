@@ -3,7 +3,7 @@ import pytest
 import torch
 
 from nv_maser.config import CoilConfig, ModelArchitecture, ModelConfig, SimConfig
-from nv_maser.model.controller import CNNController, MLPController, build_controller
+from nv_maser.model.controller import CNNController, LSTMController, MLPController, build_controller
 
 
 @pytest.fixture
@@ -78,6 +78,36 @@ def test_cuda_transfer() -> None:
     out = model(x)
     assert out.device.type == "cuda"
     assert out.shape == (4, 8)
+
+
+# ---------------------------------------------------------------------------
+# LSTM tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def lstm_model() -> LSTMController:
+    return LSTMController(64, ModelConfig(architecture=ModelArchitecture.LSTM), CoilConfig())
+
+
+def test_lstm_output_shape(lstm_model: LSTMController) -> None:
+    """LSTM: (B, 1, 64, 64) → (B, 8)."""
+    out = lstm_model(_dummy_input())
+    assert out.shape == (4, 8)
+
+
+def test_lstm_output_range(lstm_model: LSTMController) -> None:
+    """LSTM outputs within [-max_current, +max_current]."""
+    max_c = CoilConfig().max_current_amps
+    out = lstm_model(_dummy_input(16))
+    assert float(out.abs().max().item()) <= max_c + 1e-5
+
+
+def test_factory_builds_lstm() -> None:
+    """build_controller returns LSTMController."""
+    cfg = ModelConfig(architecture=ModelArchitecture.LSTM)
+    model = build_controller(64, cfg, CoilConfig())
+    assert isinstance(model, LSTMController)
 
 
 def test_backward_pass(cnn_model: CNNController) -> None:

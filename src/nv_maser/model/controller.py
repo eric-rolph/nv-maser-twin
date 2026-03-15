@@ -133,6 +133,78 @@ class MLPController(nn.Module):
         return self.network(flat) * self.max_current
 
 
+class LSTMController(nn.Module):
+    """
+    LSTM-based shimming controller.
+
+    Architecture::
+
+        Input: (B, 1, size, size) field heatmap
+        → CNN feature extractor (same conv stack as CNNController)
+        → Treat flat feature as sequence of length 1 → LSTM
+        → Linear head → tanh * max_current → (B, num_coils)
+    """
+
+    def __init__(
+        self, grid_size: int, model_cfg: ModelConfig, coil_cfg: CoilConfig
+    ) -> None:
+        super().__init__()
+        self.max_current = coil_cfg.max_current_amps
+
+        # Reuse the same CNN conv stack as CNNController
+        layers: list[nn.Module] = []
+        in_ch = 1
+        for out_ch in model_cfg.cnn_channels:
+            layers.extend(
+                [
+                    nn.Conv2d(
+                        in_ch,
+                        out_ch,
+                        kernel_size=model_cfg.cnn_kernel_size,
+                        padding=model_cfg.cnn_kernel_size // 2,
+                    ),
+                    nn.BatchNorm2d(out_ch),
+                    _activation(model_cfg.activation),
+                    nn.MaxPool2d(2),
+                ]
+            )
+            in_ch = out_ch
+
+        layers.append(nn.AdaptiveAvgPool2d(1))
+        self.conv_stack = nn.Sequential(*layers)
+
+        # Compute flat feature size after conv stack
+        with torch.no_grad():
+            dummy = torch.zeros(1, 1, grid_size, grid_size)
+            flat_size = self.conv_stack(dummy).view(1, -1).shape[1]
+
+        hidden_size = model_cfg.lstm_hidden_size
+        self.lstm = nn.LSTM(
+            input_size=flat_size,
+            hidden_size=hidden_size,
+            num_layers=model_cfg.lstm_num_layers,
+            batch_first=True,
+        )
+        self.head = nn.Sequential(
+            nn.Linear(hidden_size, coil_cfg.num_coils),
+            nn.Tanh(),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            x: (batch, 1, size, size) distorted field tensor.
+
+        Returns:
+            (batch, num_coils) coil currents in physical units (Amps).
+        """
+        features = self.conv_stack(x).view(x.size(0), -1)  # (B, flat_size)
+        lstm_input = features.unsqueeze(1)                  # (B, 1, flat_size)
+        lstm_out, _ = self.lstm(lstm_input)                 # (B, 1, hidden_size)
+        context = lstm_out.squeeze(1)                       # (B, hidden_size)
+        return self.head(context) * self.max_current
+
+
 def build_controller(
     grid_size: int, model_cfg: ModelConfig, coil_cfg: CoilConfig
 ) -> nn.Module:
@@ -142,5 +214,7 @@ def build_controller(
         return CNNController(grid_size, model_cfg, coil_cfg)
     elif arch == "mlp":
         return MLPController(grid_size, model_cfg, coil_cfg)
+    elif arch == "lstm":
+        return LSTMController(grid_size, model_cfg, coil_cfg)
     else:
         raise ValueError(f"Unknown architecture: {arch}")
