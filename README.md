@@ -1,22 +1,26 @@
 # NV Maser "Tricorder" Digital Twin
 
-`Python 3.10+` `PyTorch` `FastAPI` `Tests: 119 passed`
+`Python 3.10+` `PyTorch` `FastAPI` `Tests: 376 passed`
 
 Real-time digital twin of an active magnetic shimming system for a **Nitrogen-Vacancy (NV) center diamond maser** — simulates, trains, serves, and reinforcement-learns a shimming policy that keeps the B₀ field uniform to < 100 ppm.
+
+The twin includes a full physics stack (NV spin dynamics, optical pump, thermal coupling, Halbach array, cavity QED, signal chain SNR) and a PPO-based RL pipeline with closed-loop validation.
 
 ---
 
 ## What it does
 
-1. Simulates a base magnetic field from a permanent Halbach array (50 mT)
-2. Introduces realistic spatial disturbances (environmental interference, thermal drift)
-3. Runs a PyTorch neural controller (CNN / MLP / LSTM) to compute corrective coil currents
-4. Drives simulated micro-coils to cancel distortions in real-time
-5. Exposes a FastAPI REST server so external hardware can query the controller over HTTP
-6. Provides a gym-compatible RL environment and a REINFORCE baseline for policy learning
-7. Exports trained models to ONNX for hardware-accelerated or cross-runtime deployment
-8. Tracks all training runs in a local SQLite experiment database
-9. Visualizes the entire pipeline as a live oscilloscope-style dashboard
+1. Simulates a base magnetic field from a permanent Halbach array (50 mT) with multipole harmonics
+2. Introduces realistic spatial disturbances (harmonics, mains hum, transient spikes, DC drift, thermal noise)
+3. Models NV spin dynamics, optical pumping, and maser gain/threshold physics
+4. Couples thermal effects (pump heating → T₂* degradation, cavity Q reduction)
+5. Computes end-to-end signal chain SNR budget (sensor noise, ADC quantization, DAC settling)
+6. Runs a PyTorch neural controller (CNN / MLP / LSTM) to compute corrective coil currents
+7. Evaluates with a closed-loop time-stepping simulator (disturbance → sensor → controller → DAC → coils → field)
+8. Trains via supervised learning or PPO reinforcement learning with physics-informed loss
+9. Exposes a FastAPI REST server so external hardware can query the controller over HTTP
+10. Exports trained models to ONNX for hardware-accelerated or cross-runtime deployment
+11. Tracks all training runs in a local SQLite experiment database
 
 ### Mental model (audio analogy)
 
@@ -28,7 +32,8 @@ Real-time digital twin of an active magnetic shimming system for a **Nitrogen-Va
 | Inverted control signal | Corrective coil currents | Model output → coil superposition |
 | Flat output waveform | Uniform net field | `FieldUniformityLoss` → 0 |
 | Game environment | RL shimming environment | `ShimmingEnv` (gym-compatible) |
-| Self-learning mixer | REINFORCE policy gradient | `StochasticShimmingPolicy` |
+| Self-learning DJ | PPO policy gradient with GAE | `PPOTrainer` + `ActorCritic` |
+| Feedback loop monitor | Closed-loop time-stepper | `ClosedLoopSimulator` |
 
 ---
 
@@ -39,18 +44,27 @@ src/nv_maser/
 ├── config.py               Pydantic SimConfig — all tunable parameters
 ├── physics/
 │   ├── grid.py             2D spatial grid (64×64, 10 mm span)
-│   ├── base_field.py       Halbach B₀ generator (50 mT)
-│   ├── disturbance.py      Spatial harmonic interference + randomize()
-│   ├── coils.py            Biot-Savart shim coil model
-│   └── environment.py      Unified physics environment compositor
+│   ├── base_field.py       Halbach B₀ generator (multipole harmonics)
+│   ├── disturbance.py      Spatial harmonics + mains hum + transients + DC drift
+│   ├── coils.py            Spatial gradient harmonic shim coil model
+│   ├── environment.py      Unified physics environment compositor
+│   ├── nv_spin.py          NV center spin dynamics (T₁/T₂/T₂* relaxation)
+│   ├── optical_pump.py     Optical pumping & polarization transfer
+│   ├── thermal.py          Thermal model (pump heating → T₂*/Q degradation)
+│   ├── halbach.py          Halbach multipole field generator
+│   ├── cavity_qed.py       Cavity QED threshold & cooperativity
+│   ├── signal_chain.py     Signal chain SNR budget (sensor → ADC → DAC → coils)
+│   └── closed_loop.py      Time-stepping closed-loop shimming simulator
 ├── model/
 │   ├── controller.py       CNN / MLP / LSTM controllers + build_controller()
 │   ├── training.py         Supervised training loop, checkpointing, tracker integration
-│   └── loss.py             Field uniformity loss + current penalty
+│   └── loss.py             Physics-informed loss (field variance + gain budget + cooperativity)
 ├── api/
 │   └── server.py           FastAPI server (/health, /shim, /metrics, /reload, /info, /ui)
 ├── rl/
-│   └── env.py              ShimmingEnv — gym-compatible RL environment
+│   ├── env.py              ShimmingEnv — gym-compatible RL environment
+│   ├── ppo.py              PPO algorithm (ActorCritic, GAE, RolloutBuffer, PPOTrainer)
+│   └── bridge.py           RL/supervised → closed-loop bridge (load + validate)
 ├── export/
 │   └── onnx_export.py      ONNX export via torch.onnx.export
 ├── tracking/
@@ -61,6 +75,7 @@ src/nv_maser/
 
 scripts/
 ├── train_rl.py             REINFORCE policy-gradient baseline
+├── train_ppo.py            PPO training CLI (modern RL)
 ├── run_sweep.py            Hyperparameter grid search (lr × arch)
 ├── export_onnx.py          ONNX export CLI
 ├── build_dataset.py        Dataset pre-build CLI
@@ -72,7 +87,7 @@ benchmarks/
 docs/adr/                   Architecture Decision Records (ADR-001 – ADR-004)
 config/default.yaml         Default simulation parameters (YAML, deep-merge)
 experiments/                SQLite runs.db — auto-created on first train
-tests/                      119 passed, 2 skipped (CUDA + onnxruntime)
+tests/                      376 passed, 2 skipped (CUDA + onnxruntime)
 checkpoints/                Saved model weights + optional model.onnx (git-ignored)
 ```
 
@@ -137,18 +152,37 @@ python -m nv_maser dataset --num-samples 50000 --cache-dir dataset_cache/
 ### RL training
 
 ```bash
+# REINFORCE baseline
 python scripts/train_rl.py --episodes 500 --arch cnn --steps 50 --seed 42
-python scripts/train_rl.py --episodes 200 --arch lstm --config my_config.yaml
+
+# PPO (recommended)
+python scripts/train_ppo.py --timesteps 50000 --arch cnn --seed 42
+python scripts/train_ppo.py --timesteps 100000 --arch cnn --eval-episodes 20
+```
+
+### Closed-loop validation
+
+```python
+from nv_maser.rl.bridge import validate_policy_closed_loop
+
+# Validate a trained PPO policy in the full closed-loop simulator
+summary = validate_policy_closed_loop(
+    "checkpoints/rl/best_ppo.pt",
+    duration_us=100_000,
+    policy_type="ppo",
+)
+print(summary)  # mean_variance, mean_gain_budget, masing_fraction, ...
 ```
 
 ### Tests and benchmarks
 
 ```bash
-make test                               # 119 passed, 2 skipped
+make test                               # 376 passed, 2 skipped
 make test-cov                           # HTML coverage report in htmlcov/
 make lint                               # ruff check
 make benchmark                          # multi-arch latency table
 pytest tests/test_api.py -v             # API endpoint tests (23 tests)
+pytest tests/test_integration.py -v     # End-to-end integration tests
 ```
 
 ---
@@ -333,6 +367,25 @@ Set `LOG_FORMAT=json` to emit newline-delimited JSON log records (useful with lo
 ```bash
 LOG_FORMAT=json python -m nv_maser serve
 ```
+
+---
+
+## Physics modules
+
+The digital twin includes a multi-physics simulation stack built across Phases 1–8:
+
+| Phase | Module | Key outputs |
+|---|---|---|
+| 1 | **NV Spin Dynamics** | T₁, T₂, T₂* relaxation; polarization; masing threshold |
+| 2 | **Closed-Loop Hardware** | Sensor noise, ADC quantization, DAC settling, coil dynamics |
+| 3 | **Thermal Coupling** | Pump heating → T₂*/Q degradation, effective temperature |
+| 4 | **Halbach Multipole** | Realistic B₀ field with higher-order harmonics |
+| 5 | **Signal Chain SNR** | End-to-end SNR budget from sensor to corrected field |
+| 6 | **Cavity QED** | Cooperativity, masing threshold, gain budget |
+| 7 | **Physics-Informed ML** | Loss terms for gain budget + cooperativity; RL reward shaping |
+| 8 | **PPO RL + Disturbances** | PPO with GAE; mains hum, transient spikes, DC drift |
+
+All physics models feed into `FieldEnvironment.compute_uniformity_metric()` which returns a unified metrics dict (SNR, cooperativity, gain budget, thermal load, pump saturation).
 
 ---
 
