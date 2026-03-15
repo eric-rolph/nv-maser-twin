@@ -124,7 +124,7 @@ class ClosedLoopSimulator:
         self.controller_fn = controller_fn
 
         # Build physics components
-        self.env = FieldEnvironment(config)
+        self.env = FieldEnvironment(config, thermal_seed=seed)
         self.sensors = HallSensorArray(
             self.env.grid, config.feedback, seed=seed
         )
@@ -171,11 +171,18 @@ class ClosedLoopSimulator:
         """Execute one control loop iteration."""
         fb = self.config.feedback
 
-        # 1. Evolve disturbance (convert μs → seconds for the physics)
+        # 1. Evolve disturbance + thermal state (convert μs → seconds)
         t_seconds = t_us * 1e-6
         self.env.step(t_seconds)
 
-        # 2. Get current field (B₀ + disturbance + current coil correction)
+        # 1b. Update coil dynamics L/R if temperature has shifted resistance
+        thermal = self.env.thermal_state
+        if thermal is not None:
+            # Temporarily adjust tau for this step based on effective resistance
+            effective_tau = fb.coil_inductance_uh / thermal.effective_coil_resistance_ohm
+            self.coil_dynamics.tau_us = effective_tau
+
+        # 2. Get current field (B₀ + thermal shift + disturbance + current coil correction)
         if self.coil_dynamics.current_state is not None:
             current_field = self.env.apply_correction(
                 self.coil_dynamics.current_state
@@ -184,8 +191,6 @@ class ClosedLoopSimulator:
             current_field = self.env.distorted_field
 
         # 3. Controller sees the full field map
-        #    (in a real system this would be reconstructed from sensors,
-        #     but for now we model the sensor noise separately)
         commanded = self.controller_fn(current_field)
 
         # 4. DAC quantization
@@ -196,22 +201,29 @@ class ClosedLoopSimulator:
         )
 
         # 5. Coil L/R settling over the available time
-        #    Available time = loop period - total latency
         settling_time = max(0, loop_period_us - fb.total_loop_latency_us)
         actual = self.coil_dynamics.step(quantized, settling_time)
 
         # 6. Compute the resulting net field with actual currents
         net_field = self.env.apply_correction(actual)
 
-        # 7. Evaluate performance
+        # 7. Evaluate performance with thermally-adjusted NV/maser params
         mask = self.env.grid.active_zone_mask
         active = net_field[mask]
         var_b = float(np.var(active))
         std_b = float(np.std(active))
 
-        maser = compute_maser_metrics(
-            net_field, mask, self.config.nv, self.config.maser
-        )
+        nv_config = self.config.nv
+        maser_config = self.config.maser
+        if thermal is not None:
+            nv_config = nv_config.model_copy(
+                update={"t2_star_us": thermal.effective_t2_star_us}
+            )
+            maser_config = maser_config.model_copy(
+                update={"cavity_q": thermal.effective_cavity_q}
+            )
+
+        maser = compute_maser_metrics(net_field, mask, nv_config, maser_config)
 
         # 8. Sensor readings (for diagnostic/logging)
         sensor_readings = self.sensors.measure(net_field)

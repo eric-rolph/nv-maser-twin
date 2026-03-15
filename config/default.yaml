@@ -48,6 +48,16 @@ feedback:
   control_loop_period_us: 1000.0  # 1 kHz control loop
   computation_latency_us: 100.0   # NN inference on MCU
 
+thermal:
+  reference_temperature_c: 25.0      # lab reference temperature
+  ambient_temperature_c: 25.0        # operating ambient (ΔT=0 → no thermal shift)
+  magnet_tempco_pct_per_c: -0.12     # NdFeB remanence tempco
+  t2_star_tempco_exponent: 1.0       # phonon T2* scaling exponent
+  cavity_wall_tempco_per_c: 0.004    # copper wall resistivity tempco
+  coil_tempco_per_c: 0.004           # copper coil resistivity tempco
+  thermal_drift_rate_c_per_s: 0.01   # slow environmental drift
+  thermal_noise_std_c: 0.1           # thermal fluctuation noise σ
+
 model:
   architecture: cnn       # cnn | mlp | lstm
   cnn_channels: [16, 32, 64]

@@ -7,12 +7,13 @@ from __future__ import annotations
 import numpy as np
 from numpy.typing import NDArray
 
-from ..config import SimConfig
+from ..config import SimConfig, NVConfig, MaserConfig
 from .grid import SpatialGrid
 from .base_field import compute_base_field
 from .disturbance import DisturbanceGenerator
 from .coils import ShimCoilArray
 from .maser_gain import compute_maser_metrics, max_tolerable_b_std
+from .thermal import ThermalModel, ThermalState, compute_thermal_state
 
 
 class FieldEnvironment:
@@ -27,30 +28,51 @@ class FieldEnvironment:
     - Evaluating field uniformity (for the loss function)
     """
 
-    def __init__(self, config: SimConfig) -> None:
+    def __init__(self, config: SimConfig, thermal_seed: int | None = None) -> None:
         self.config = config
         self.grid = SpatialGrid(config.grid)
         self.base_field = compute_base_field(self.grid, config.field)
         self.disturbance_gen = DisturbanceGenerator(self.grid, config.disturbance)
         self.coils = ShimCoilArray(self.grid, config.coils)
 
+        # Thermal model (always created; at default 25°C → zero offset)
+        self.thermal_model = ThermalModel(config.thermal, seed=thermal_seed)
+        self._thermal_state: ThermalState | None = None
+
         # Current state
         self._current_disturbance: NDArray[np.float32] | None = None
 
     @property
+    def thermal_state(self) -> ThermalState | None:
+        """Current thermal state, if step() has been called."""
+        return self._thermal_state
+
+    @property
+    def effective_base_field(self) -> NDArray[np.float32]:
+        """B₀ adjusted for thermal drift."""
+        if self._thermal_state is not None:
+            return self.base_field + np.float32(self._thermal_state.b0_shift_tesla)
+        return self.base_field
+
+    @property
     def distorted_field(self) -> NDArray[np.float32]:
-        """B₀ + current disturbance (before correction)."""
+        """B₀ (thermally shifted) + current disturbance (before correction)."""
         if self._current_disturbance is None:
             self._current_disturbance = self.disturbance_gen.generate()
-        return self.base_field + self._current_disturbance
+        return self.effective_base_field + self._current_disturbance
 
     def step(self, t: float = 0.0) -> NDArray[np.float32]:
         """
         Advance the environment: generate a new disturbance at time t.
+        Also updates the thermal state.
 
         Returns the distorted field (without correction).
         """
         self._current_disturbance = self.disturbance_gen.generate(t)
+        self._thermal_state = self.thermal_model.state_at(
+            t, self.config.field, self.config.nv,
+            self.config.maser, self.config.feedback,
+        )
         return self.distorted_field
 
     def apply_correction(
@@ -74,11 +96,14 @@ class FieldEnvironment:
         """
         Compute field uniformity metrics over the active zone.
 
+        When thermal state is available, uses temperature-adjusted T2* and Q.
+
         Returns dict with:
             - variance: Var(B) over active zone (the primary loss target)
             - std: std(B) over active zone in Tesla
             - ppm: peak-to-peak homogeneity in ppm
             - max_deviation: max |B - B₀| over active zone
+            - temperature_c: current temperature (if thermal active)
         """
         mask = self.grid.active_zone_mask
         active = net_field[mask]
@@ -92,18 +117,32 @@ class FieldEnvironment:
         ppm = ((max_b - min_b) / mean_b * 1e6) if mean_b > 0 else float("inf")
         max_dev = float(np.max(np.abs(active - self.config.field.b0_tesla)))
 
-        # Maser gain metrics from NV spin physics
-        maser = compute_maser_metrics(
-            net_field, mask, self.config.nv, self.config.maser
-        )
+        # Use thermally-adjusted NV/maser params if available
+        nv_config = self.config.nv
+        maser_config = self.config.maser
+        if self._thermal_state is not None:
+            nv_config = nv_config.model_copy(
+                update={"t2_star_us": self._thermal_state.effective_t2_star_us}
+            )
+            maser_config = maser_config.model_copy(
+                update={"cavity_q": self._thermal_state.effective_cavity_q}
+            )
 
-        return {
+        maser = compute_maser_metrics(net_field, mask, nv_config, maser_config)
+
+        result = {
             "variance": var_b,
             "std": std_b,
             "ppm": ppm,
             "max_deviation": max_dev,
             **maser,
         }
+
+        if self._thermal_state is not None:
+            result["temperature_c"] = self._thermal_state.temperature_c
+            result["b0_shift_tesla"] = self._thermal_state.b0_shift_tesla
+
+        return result
 
     def generate_training_data(
         self, num_samples: int

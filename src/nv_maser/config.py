@@ -330,6 +330,95 @@ class FeedbackConfig(BaseModel):
         return self.computation_latency_us + self.dac_settling_time_us
 
 
+class ThermalConfig(BaseModel):
+    """Thermal coupling parameters.
+
+    Models how temperature fluctuations affect every subsystem simultaneously:
+    - Halbach magnets: NdFeB tempco drifts B₀
+    - Diamond: phonon-limited T2* degradation
+    - Cavity: wall resistivity changes Q
+    - Coils: copper resistivity changes R → L/R time constant
+    """
+
+    # ── Operating point ───────────────────────────────────────────
+    reference_temperature_c: float = Field(
+        25.0,
+        description="Reference temperature (°C) at which all nominal params are specified.",
+    )
+    ambient_temperature_c: float = Field(
+        25.0,
+        description="Current ambient temperature (°C). Set differently to model drift.",
+    )
+
+    # ── Halbach magnet (NdFeB) ────────────────────────────────────
+    magnet_tempco_pct_per_c: float = Field(
+        -0.12,
+        description=(
+            "NdFeB reversible temperature coefficient (%/°C). "
+            "Typical N52: -0.12%/°C. Br drops as temperature rises."
+        ),
+    )
+
+    # ── Diamond NV T2* ────────────────────────────────────────────
+    t2_star_tempco_exponent: float = Field(
+        1.0,
+        ge=0.0,
+        le=3.0,
+        description=(
+            "Temperature exponent for T2* degradation: "
+            "T2*(T) = T2*(T_ref) × (T_ref/T)^n. "
+            "n=1 for single-phonon Raman, n≈2 for Orbach. "
+            "Conservative default n=1."
+        ),
+    )
+
+    # ── Microwave cavity ──────────────────────────────────────────
+    cavity_wall_tempco_per_c: float = Field(
+        0.004,
+        ge=0.0,
+        description=(
+            "Temperature coefficient of cavity wall resistivity (/°C). "
+            "Copper: ~0.004/°C, aluminum: ~0.004/°C. "
+            "Q ∝ 1/√ρ, so Q(T) = Q_ref × √(1/(1 + α·ΔT))."
+        ),
+    )
+
+    # ── Coil copper ───────────────────────────────────────────────
+    coil_tempco_per_c: float = Field(
+        0.004,
+        ge=0.0,
+        description=(
+            "Temperature coefficient of coil DC resistance (/°C). "
+            "Copper: ~0.00393/°C. Affects L/R time constant."
+        ),
+    )
+
+    # ── Temporal dynamics ─────────────────────────────────────────
+    thermal_drift_rate_c_per_s: float = Field(
+        0.01,
+        ge=0.0,
+        description=(
+            "Rate of ambient temperature drift (°C/s). "
+            "Models slow environmental changes. 0.01 °C/s = 36 °C/hr (worst case). "
+            "Well-insulated lab: ~0.001 °C/s."
+        ),
+    )
+    thermal_noise_std_c: float = Field(
+        0.1,
+        ge=0.0,
+        description=(
+            "Standard deviation of fast temperature fluctuations (°C). "
+            "Models short-term noise on top of drift. "
+            "Well-controlled: 0.01 °C. Moderate: 0.1 °C."
+        ),
+    )
+
+    @property
+    def delta_t(self) -> float:
+        """Temperature offset from reference (°C)."""
+        return self.ambient_temperature_c - self.reference_temperature_c
+
+
 class VizConfig(BaseModel):
     """Visualization parameters."""
 
@@ -354,6 +443,7 @@ class SimConfig(BaseModel):
     nv: NVConfig = NVConfig()
     maser: MaserConfig = MaserConfig()
     feedback: FeedbackConfig = FeedbackConfig()
+    thermal: ThermalConfig = ThermalConfig()
     model: ModelConfig = ModelConfig()
     training: TrainingConfig = TrainingConfig()
     viz: VizConfig = VizConfig()
