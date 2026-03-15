@@ -12,6 +12,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+_PHYSICS_COLUMNS = ("gain_budget", "cooperativity", "physics_penalty", "field_variance")
+
 if TYPE_CHECKING:
     from nv_maser.config import SimConfig
 
@@ -29,11 +31,15 @@ CREATE TABLE IF NOT EXISTS runs (
 );
 
 CREATE TABLE IF NOT EXISTS metrics (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    run_id      INTEGER NOT NULL REFERENCES runs(id),
-    epoch       INTEGER NOT NULL,
-    train_loss  REAL,
-    val_loss    REAL
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id            INTEGER NOT NULL REFERENCES runs(id),
+    epoch             INTEGER NOT NULL,
+    train_loss        REAL,
+    val_loss          REAL,
+    gain_budget       REAL,
+    cooperativity     REAL,
+    physics_penalty   REAL,
+    field_variance    REAL
 );
 """
 
@@ -46,6 +52,11 @@ class ExperimentTracker:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         with sqlite3.connect(self.db_path) as conn:
             conn.executescript(_DDL)
+            # Migrate older databases that lack physics columns.
+            existing = {row[1] for row in conn.execute("PRAGMA table_info(metrics)")}
+            for col in _PHYSICS_COLUMNS:
+                if col not in existing:
+                    conn.execute(f"ALTER TABLE metrics ADD COLUMN {col} REAL")
 
     # ------------------------------------------------------------------
     # Public API
@@ -86,17 +97,25 @@ class ExperimentTracker:
     ) -> None:
         """Append one epoch's metrics for the given run.
 
-        Extra keyword arguments (e.g. gain_budget, cooperativity) are
-        silently accepted for forward compatibility but not persisted
-        in the current schema.
+        Extra keyword arguments ``gain_budget``, ``cooperativity``,
+        ``physics_penalty``, and ``field_variance`` are persisted when
+        provided. Unknown keys are silently ignored.
         """
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
                 """
-                INSERT INTO metrics (run_id, epoch, train_loss, val_loss)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO metrics
+                    (run_id, epoch, train_loss, val_loss,
+                     gain_budget, cooperativity, physics_penalty, field_variance)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (run_id, epoch, train_loss, val_loss),
+                (
+                    run_id, epoch, train_loss, val_loss,
+                    extra.get("gain_budget"),
+                    extra.get("cooperativity"),
+                    extra.get("physics_penalty"),
+                    extra.get("field_variance"),
+                ),
             )
 
     def finish_run(self, run_id: int, best_val_loss: float) -> None:

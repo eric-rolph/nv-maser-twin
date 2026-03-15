@@ -71,10 +71,12 @@ class FieldUniformityLoss(nn.Module):
 
 
 class PhysicsInformedLoss(nn.Module):
-    """Physics-informed loss: Var(B) + λ||I||² + α/gain_budget + β·max(0, 1−C).
+    """Physics-informed loss: Var(B) + λ||I||² − α·log(G) + β·max(0, 1−C).
 
     Wraps :class:`FieldUniformityLoss` and adds scalar penalties computed
-    from the physics environment.  The physics terms are non-differentiable
+    from the physics environment.  Uses ``-log(gain_budget)`` instead of
+    ``1/gain_budget`` to keep the penalty bounded and on the same scale
+    as the field-variance term.  The physics terms are non-differentiable
     scalars (numpy), so they act as an adaptive weighting on each batch
     rather than gradient sources.
     """
@@ -84,8 +86,8 @@ class PhysicsInformedLoss(nn.Module):
         active_zone_mask: torch.Tensor,
         env: FieldEnvironment,
         current_penalty_weight: float = 0.01,
-        gain_budget_weight: float = 0.1,
-        cooperativity_weight: float = 0.1,
+        gain_budget_weight: float = 1e-5,
+        cooperativity_weight: float = 1e-5,
     ) -> None:
         super().__init__()
         self.base_loss = FieldUniformityLoss(active_zone_mask, current_penalty_weight)
@@ -113,8 +115,8 @@ class PhysicsInformedLoss(nn.Module):
         gain_budget = phys.get("gain_budget", 1.0)
         cooperativity = phys.get("cooperativity", 1.0)
 
-        # 1/gain_budget penalty: smaller budget → larger penalty
-        gb_penalty = 1.0 / max(gain_budget, 1e-6)
+        # -log(gain_budget) penalty: bounded, monotonic, same scale as variance
+        gb_penalty = -np.log(max(gain_budget, 1e-20))
         # Cooperativity shortfall: penalty when C < 1
         coop_penalty = max(0.0, 1.0 - cooperativity)
 

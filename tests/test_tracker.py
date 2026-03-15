@@ -110,3 +110,61 @@ def test_delete_run_removes_metrics(tmp_path):
 
     assert tracker.list_runs() == []
     assert tracker.get_run_metrics(run_id) == []
+
+
+def test_log_epoch_persists_physics_metrics(tmp_path):
+    """Physics kwargs (gain_budget, cooperativity, etc.) must be persisted."""
+    tracker = make_tracker(tmp_path)
+    run_id = tracker.start_run(arch="cnn")
+    tracker.log_epoch(
+        run_id, 0, 0.5, 0.6,
+        gain_budget=2.5, cooperativity=0.8,
+        physics_penalty=0.01, field_variance=1e-5,
+    )
+    rows = tracker.get_run_metrics(run_id)
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["gain_budget"] == pytest.approx(2.5)
+    assert row["cooperativity"] == pytest.approx(0.8)
+    assert row["physics_penalty"] == pytest.approx(0.01)
+    assert row["field_variance"] == pytest.approx(1e-5)
+
+
+def test_log_epoch_without_physics_stores_nulls(tmp_path):
+    """When no physics kwargs are passed, columns should be NULL."""
+    tracker = make_tracker(tmp_path)
+    run_id = tracker.start_run(arch="cnn")
+    tracker.log_epoch(run_id, 0, 0.5, 0.6)
+    rows = tracker.get_run_metrics(run_id)
+    row = rows[0]
+    assert row["gain_budget"] is None
+    assert row["cooperativity"] is None
+
+
+def test_tracker_migrates_old_schema(tmp_path):
+    """Opening a DB created with the old (4-column) schema should auto-migrate."""
+    import sqlite3
+    db_path = tmp_path / "old.db"
+    # Create old-style DB without physics columns
+    with sqlite3.connect(db_path) as conn:
+        conn.executescript("""
+            CREATE TABLE runs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT, arch TEXT, config_hash TEXT,
+                num_samples INTEGER, epochs INTEGER, notes TEXT,
+                best_val_loss REAL, end_timestamp TEXT
+            );
+            CREATE TABLE metrics (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_id INTEGER NOT NULL,
+                epoch INTEGER NOT NULL,
+                train_loss REAL,
+                val_loss REAL
+            );
+        """)
+    # Opening with ExperimentTracker should add missing columns
+    tracker = ExperimentTracker(db_path)
+    run_id = tracker.start_run(arch="test")
+    tracker.log_epoch(run_id, 0, 0.5, 0.6, gain_budget=1.23)
+    rows = tracker.get_run_metrics(run_id)
+    assert rows[0]["gain_budget"] == pytest.approx(1.23)

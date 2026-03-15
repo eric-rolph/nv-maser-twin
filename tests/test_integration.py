@@ -276,7 +276,7 @@ class TestPhysicsInformedLoss:
         cfg = SimConfig(grid={"size": 16}, disturbance={"seed": 42})
         env = FieldEnvironment(cfg, thermal_seed=0)
         mask = torch.tensor(env.grid.active_zone_mask, dtype=torch.bool)
-        loss_fn = PhysicsInformedLoss(mask, env, gain_budget_weight=0.1)
+        loss_fn = PhysicsInformedLoss(mask, env, gain_budget_weight=1e-5)
 
         net = torch.randn(2, 16, 16)
         currents = torch.randn(2, cfg.coils.num_coils)
@@ -296,7 +296,7 @@ class TestPhysicsInformedLoss:
         mask = torch.tensor(env.grid.active_zone_mask, dtype=torch.bool)
 
         base_fn = FieldUniformityLoss(mask, 1e-6)
-        phys_fn = PhysicsInformedLoss(mask, env, 1e-6, 0.1, 0.1)
+        phys_fn = PhysicsInformedLoss(mask, env, 1e-6, 1e-5, 1e-5)
 
         net = torch.randn(2, 16, 16)
         currents = torch.randn(2, cfg.coils.num_coils)
@@ -305,6 +305,26 @@ class TestPhysicsInformedLoss:
         phys_loss, _ = phys_fn(net, currents)
 
         assert phys_loss.item() >= base_loss.item() - 1e-6
+
+    def test_physics_penalty_same_order_as_variance(self) -> None:
+        """With default weights, physics penalty should be within 100x of field variance."""
+        cfg = SimConfig(grid={"size": 16}, disturbance={"seed": 42})
+        env = FieldEnvironment(cfg, thermal_seed=0)
+        mask = torch.tensor(env.grid.active_zone_mask, dtype=torch.bool)
+        loss_fn = PhysicsInformedLoss(mask, env)
+
+        # Use the actual distorted field (realistic input)
+        net_field = env.step(t=0.0)
+        net = torch.tensor(net_field, dtype=torch.float32).unsqueeze(0)
+        currents = torch.zeros(1, cfg.coils.num_coils)
+        _, metrics = loss_fn(net, currents)
+
+        fv = metrics["field_variance"]
+        pp = metrics["physics_penalty"]
+        # Physics penalty should be within 2 orders of magnitude of field variance
+        # (not 4+ orders like the old 1/gain_budget formulation)
+        assert pp < fv * 100, f"physics_penalty {pp:.4e} >> field_variance {fv:.4e}"
+        assert pp > 0, "physics_penalty should be positive"
 
 
 # ═══════════════════════════════════════════════════════════════════════

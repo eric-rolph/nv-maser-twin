@@ -518,12 +518,12 @@ class TrainingConfig(BaseModel):
         ),
     )
     gain_budget_penalty_weight: float = Field(
-        0.1,
+        1e-5,
         ge=0.0,
-        description="Weight α for 1/gain_budget penalty in physics loss.",
+        description="Weight α for −log(gain_budget) penalty in physics loss.",
     )
     cooperativity_penalty_weight: float = Field(
-        0.1,
+        1e-5,
         ge=0.0,
         description="Weight β for max(0, 1−C) penalty in physics loss.",
     )
