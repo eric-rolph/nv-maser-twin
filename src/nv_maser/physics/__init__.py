@@ -10,3 +10,8 @@ from .halbach import (  # noqa: F401
     compute_halbach_field,
     compute_multipole_coefficients,
 )
+from .signal_chain import (  # noqa: F401
+    SignalChainBudget,
+    compute_signal_chain_budget,
+    compute_snr_vs_field_uniformity,
+)

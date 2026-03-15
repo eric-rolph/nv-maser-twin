@@ -14,6 +14,7 @@ from .disturbance import DisturbanceGenerator
 from .coils import ShimCoilArray
 from .maser_gain import compute_maser_metrics, max_tolerable_b_std
 from .thermal import ThermalModel, ThermalState, compute_thermal_state
+from .signal_chain import compute_signal_chain_budget
 
 
 class FieldEnvironment:
@@ -141,6 +142,16 @@ class FieldEnvironment:
         if self._thermal_state is not None:
             result["temperature_c"] = self._thermal_state.temperature_c
             result["b0_shift_tesla"] = self._thermal_state.b0_shift_tesla
+
+        # Signal chain SNR budget
+        gain_budget = maser["gain_budget"]
+        snr_budget = compute_signal_chain_budget(
+            nv_config, maser_config, self.config.signal_chain, gain_budget
+        )
+        result["snr_db"] = snr_budget.snr_db
+        result["received_power_w"] = snr_budget.received_power_w
+        result["total_noise_w"] = snr_budget.total_noise_w
+        result["system_noise_temperature_k"] = snr_budget.system_noise_temperature_k
 
         return result
 

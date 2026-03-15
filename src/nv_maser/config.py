@@ -281,6 +281,95 @@ class MaserConfig(BaseModel):
             "0.5 = maser needs ≥50%% of peak gain to overcome cavity losses."
         ),
     )
+    coupling_beta: float = Field(
+        0.5,
+        gt=0.0,
+        le=1.0,
+        description=(
+            "Cavity coupling factor β = Q_ext / Q_loaded. "
+            "Fraction of intracavity power extracted at the coupling port. "
+            "Critical coupling β = 0.5. Over-coupled > 0.5."
+        ),
+    )
+
+
+class SignalChainConfig(BaseModel):
+    """RF signal chain parameters for SNR budget.
+
+    Models the complete receiver chain from maser emission to digitised signal:
+        NV maser → cavity coupling → LNA → bandpass filter → ADC
+
+    The SNR budget determines whether the maser output is detectable above
+    the combined thermal + amplifier + quantisation noise floor.
+    """
+
+    # ── LNA (Low Noise Amplifier) ─────────────────────────────────
+    lna_noise_figure_db: float = Field(
+        1.0,
+        ge=0.0,
+        description=(
+            "LNA noise figure (dB). Sets the added receiver noise. "
+            "Cryogenic HEMT: 0.1-0.3 dB. Room-temp GaAs: 0.5-1.5 dB. "
+            "Default 1.0 dB is a good room-temperature LNA."
+        ),
+    )
+    lna_gain_db: float = Field(
+        30.0,
+        ge=0.0,
+        description=(
+            "LNA power gain (dB). Typical 20-40 dB. "
+            "High gain reduces noise contribution of subsequent stages."
+        ),
+    )
+
+    # ── System temperature ────────────────────────────────────────
+    physical_temperature_k: float = Field(
+        300.0,
+        gt=0,
+        description=(
+            "Physical temperature of the receiver (K). "
+            "Room temperature 300 K. Cryogenic: 4-77 K."
+        ),
+    )
+
+    # ── Measurement bandwidth ─────────────────────────────────────
+    detection_bandwidth_hz: float = Field(
+        1000.0,
+        gt=0,
+        description=(
+            "Post-detection bandwidth (Hz). Determines noise floor. "
+            "Narrower → higher SNR but slower response. "
+            "1 kHz matches the shimming control loop rate."
+        ),
+    )
+
+    # ── ADC ───────────────────────────────────────────────────────
+    adc_bits: int = Field(
+        14,
+        ge=8,
+        le=24,
+        description=(
+            "ADC resolution (bits). Determines quantisation noise floor. "
+            "14-bit: typical high-speed RF ADC. 16-bit: precision."
+        ),
+    )
+    adc_full_scale_dbm: float = Field(
+        -10.0,
+        description=(
+            "ADC full-scale input power (dBm). "
+            "Sets the reference for quantisation noise."
+        ),
+    )
+
+    # ── Cable / insertion losses ──────────────────────────────────
+    insertion_loss_db: float = Field(
+        2.0,
+        ge=0.0,
+        description=(
+            "Total insertion loss between cavity and LNA (dB). "
+            "Cables, connectors, isolator. 1-3 dB typical."
+        ),
+    )
 
 
 class ModelConfig(BaseModel):
@@ -549,6 +638,7 @@ class SimConfig(BaseModel):
     coils: CoilConfig = CoilConfig()
     nv: NVConfig = NVConfig()
     maser: MaserConfig = MaserConfig()
+    signal_chain: SignalChainConfig = SignalChainConfig()
     feedback: FeedbackConfig = FeedbackConfig()
     thermal: ThermalConfig = ThermalConfig()
     model: ModelConfig = ModelConfig()

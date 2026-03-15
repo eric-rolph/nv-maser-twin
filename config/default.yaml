@@ -60,6 +60,15 @@ feedback:
   control_loop_period_us: 1000.0  # 1 kHz control loop
   computation_latency_us: 100.0   # NN inference on MCU
 
+signal_chain:
+  lna_noise_figure_db: 1.0           # room-temp GaAs LNA
+  lna_gain_db: 30.0                  # LNA power gain
+  physical_temperature_k: 300.0      # room temperature
+  detection_bandwidth_hz: 1000.0     # matches shimming control loop
+  adc_bits: 14                       # RF ADC resolution
+  adc_full_scale_dbm: -10.0          # ADC full-scale input
+  insertion_loss_db: 2.0             # cables + connectors + isolator
+
 thermal:
   reference_temperature_c: 25.0      # lab reference temperature
   ambient_temperature_c: 25.0        # operating ambient (ΔT=0 → no thermal shift)
