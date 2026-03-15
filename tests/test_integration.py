@@ -6,6 +6,8 @@ propagate correctly through the coupled chain to downstream outputs.
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pytest
 
@@ -389,3 +391,113 @@ class TestRLRewardShaping:
         # Shaped reward = variance_delta + γ × gain_budget
         # gain_budget > 0, so shaped reward should be higher
         assert r_shaped > r_plain
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# End-to-end: PPO train → checkpoint → bridge → closed-loop
+# ═══════════════════════════════════════════════════════════════════════
+
+
+class TestEndToEndPPOClosedLoop:
+    """Full pipeline: train PPO → save checkpoint → load via bridge → run closed-loop."""
+
+    @pytest.fixture()
+    def trained_checkpoint(self, tmp_path: Path) -> Path:
+        """Train a tiny PPO run and return the checkpoint path."""
+        from nv_maser.rl.ppo import PPOConfig, PPOTrainer
+
+        sim_cfg = SimConfig(grid={"size": 16}, disturbance={"seed": 42})
+        ppo_cfg = PPOConfig(
+            total_timesteps=64,
+            steps_per_rollout=32,
+            num_epochs_per_update=2,
+            batch_size=16,
+            eval_episodes=1,
+            checkpoint_dir=str(tmp_path / "ckpt"),
+            seed=0,
+        )
+        trainer = PPOTrainer(sim_config=sim_cfg, ppo_config=ppo_cfg)
+        trainer.train()
+
+        ckpt = tmp_path / "ckpt" / "best_ppo.pt"
+        assert ckpt.exists(), "PPO training did not produce a checkpoint"
+        return ckpt
+
+    def test_train_and_closed_loop_validate(self, trained_checkpoint: Path) -> None:
+        """Train PPO → load → closed-loop → metrics are valid."""
+        from nv_maser.rl.bridge import validate_policy_closed_loop
+
+        summary = validate_policy_closed_loop(
+            trained_checkpoint,
+            duration_us=10_000.0,
+            policy_type="ppo",
+            seed=0,
+        )
+
+        assert summary["num_steps"] > 0
+        assert np.isfinite(summary["mean_variance"])
+        assert summary["mean_gain_budget"] > 0
+        assert summary["policy_type"] == "ppo"
+        assert 0.0 <= summary["masing_fraction"] <= 1.0
+
+    def test_bridge_controller_matches_direct_inference(
+        self, trained_checkpoint: Path
+    ) -> None:
+        """Controller loaded via bridge produces same output as direct model call."""
+        from nv_maser.rl.bridge import load_ppo_controller
+        from nv_maser.rl.ppo import ActorCritic
+
+        controller_fn = load_ppo_controller(trained_checkpoint, deterministic=True)
+
+        # Direct model load for comparison
+        data = torch.load(trained_checkpoint, weights_only=False, map_location="cpu")
+        sim_cfg = SimConfig(**data["sim_config"])
+        ac = ActorCritic(sim_cfg.grid.size, sim_cfg.model, sim_cfg.coils)
+        ac.load_state_dict(data["actor_critic_state"])
+        ac.eval()
+
+        field = np.random.default_rng(99).standard_normal(
+            (sim_cfg.grid.size, sim_cfg.grid.size)
+        ).astype(np.float32)
+
+        bridge_out = controller_fn(field)
+
+        with torch.no_grad():
+            obs = torch.from_numpy(field).unsqueeze(0).unsqueeze(0).float()
+            features = ac._encode(obs)
+            direct_out = (ac.policy_head(features) * ac.max_current).squeeze(0).numpy()
+
+        np.testing.assert_allclose(bridge_out, direct_out, atol=1e-6)
+
+    def test_disturbance_features_in_closed_loop(self, tmp_path: Path) -> None:
+        """Closed-loop works with mains hum and DC drift enabled."""
+        from nv_maser.rl.ppo import PPOConfig, PPOTrainer
+        from nv_maser.rl.bridge import validate_policy_closed_loop
+
+        sim_cfg = SimConfig(
+            grid={"size": 16},
+            disturbance={
+                "seed": 42,
+                "mains_hum_enabled": True,
+                "dc_drift_enabled": True,
+            },
+        )
+        ppo_cfg = PPOConfig(
+            total_timesteps=64,
+            steps_per_rollout=32,
+            num_epochs_per_update=2,
+            batch_size=16,
+            eval_episodes=1,
+            checkpoint_dir=str(tmp_path / "ckpt"),
+            seed=0,
+        )
+        trainer = PPOTrainer(sim_config=sim_cfg, ppo_config=ppo_cfg)
+        trainer.train()
+
+        ckpt = tmp_path / "ckpt" / "best_ppo.pt"
+        summary = validate_policy_closed_loop(
+            ckpt, duration_us=10_000.0, policy_type="ppo", seed=0,
+        )
+
+        assert summary["num_steps"] > 0
+        assert np.isfinite(summary["mean_variance"])

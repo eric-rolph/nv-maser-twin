@@ -181,6 +181,63 @@ class DisturbanceConfig(BaseModel):
         0.1,
         description="Rate of temporal evolution for time-varying disturbances (Hz-equivalent)",
     )
+
+    # ── Realistic interference modes ──────────────────────────────
+    mains_hum_enabled: bool = Field(
+        False,
+        description=(
+            "Enable mains-frequency (50/60 Hz) magnetic interference. "
+            "Models stray fields from power lines and transformers."
+        ),
+    )
+    mains_hum_frequency_hz: float = Field(
+        50.0,
+        gt=0,
+        description="Mains frequency (Hz). 50 Hz (EU/Asia), 60 Hz (US/JP).",
+    )
+    mains_hum_amplitude_tesla: float = Field(
+        1e-6,
+        ge=0,
+        description=(
+            "Peak amplitude of mains hum interference (Tesla). "
+            "Typical lab environment: 0.1-10 μT."
+        ),
+    )
+    transient_enabled: bool = Field(
+        False,
+        description=(
+            "Enable random transient spikes (e.g., elevator motors, door magnets). "
+            "Models impulsive interference that decays exponentially."
+        ),
+    )
+    transient_rate_hz: float = Field(
+        0.01,
+        ge=0,
+        description="Mean rate of transient events (Poisson process, Hz).",
+    )
+    transient_amplitude_tesla: float = Field(
+        5e-4,
+        ge=0,
+        description="Peak amplitude of transient spikes (Tesla).",
+    )
+    transient_decay_time_s: float = Field(
+        0.1,
+        gt=0,
+        description="Exponential decay time constant for transients (seconds).",
+    )
+    dc_drift_enabled: bool = Field(
+        False,
+        description=(
+            "Enable slow DC drift (e.g., building magnetisation, "
+            "temperature-driven permeability changes)."
+        ),
+    )
+    dc_drift_rate_tesla_per_s: float = Field(
+        1e-6,
+        ge=0,
+        description="Linear DC drift rate (Tesla/second).",
+    )
+
     seed: int | None = Field(
         None, description="Random seed for reproducibility (None = random)"
     )

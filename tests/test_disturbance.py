@@ -91,3 +91,91 @@ def test_spatial_smoothness(grid: SpatialGrid) -> None:
 
     # Low-frequency region should contain more power
     assert low_power > high_power
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Mains hum disturbance
+# ═══════════════════════════════════════════════════════════════════════
+
+
+def test_mains_hum_adds_oscillation(grid: SpatialGrid) -> None:
+    """Mains hum should add a sinusoidal component at the configured frequency."""
+    cfg = DisturbanceConfig(
+        seed=0,
+        num_modes=1,
+        max_amplitude_tesla=0.0,  # disable spatial modes
+        mains_hum_enabled=True,
+        mains_hum_frequency_hz=50.0,
+        mains_hum_amplitude_tesla=1e-4,
+    )
+    gen = DisturbanceGenerator(grid, cfg)
+    # At t=0 → sin(0) = 0
+    d0 = gen.generate(t=0.0)
+    assert np.abs(d0).max() < 1e-6
+
+    # At t = 1/(4*50) → sin(π/2) = 1 → peak = 1e-4
+    d_quarter = gen.generate(t=1.0 / (4 * 50.0))
+    assert np.isclose(d_quarter.mean(), 1e-4, rtol=0.01)
+
+
+def test_mains_hum_disabled_by_default(grid: SpatialGrid) -> None:
+    """Mains hum off by default — generate at different times should only vary by spatial drift."""
+    cfg = DisturbanceConfig(seed=0, temporal_drift_rate=0.0)
+    gen = DisturbanceGenerator(grid, cfg)
+    d0 = gen.generate(t=0.0)
+    d1 = gen.generate(t=0.005)  # 5ms =  quarter cycle of 50Hz
+    np.testing.assert_array_equal(d0, d1)  # No temporal change
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# DC drift disturbance
+# ═══════════════════════════════════════════════════════════════════════
+
+
+def test_dc_drift_grows_with_time(grid: SpatialGrid) -> None:
+    """DC drift adds a linearly growing offset."""
+    cfg = DisturbanceConfig(
+        seed=0,
+        num_modes=1,
+        max_amplitude_tesla=0.0,
+        temporal_drift_rate=0.0,
+        dc_drift_enabled=True,
+        dc_drift_rate_tesla_per_s=1e-5,
+    )
+    gen = DisturbanceGenerator(grid, cfg)
+    d0 = gen.generate(t=0.0)
+    d10 = gen.generate(t=10.0)
+    offset = float(d10.mean() - d0.mean())
+    expected = 1e-5 * 10.0
+    assert np.isclose(offset, expected, rtol=0.01)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Transient spikes
+# ═══════════════════════════════════════════════════════════════════════
+
+
+def test_transient_state_cleared_on_randomize(grid: SpatialGrid) -> None:
+    """randomize() should clear active transients."""
+    cfg = DisturbanceConfig(
+        seed=0,
+        transient_enabled=True,
+        transient_rate_hz=1.0,
+        transient_amplitude_tesla=1e-3,
+    )
+    gen = DisturbanceGenerator(grid, cfg)
+    # Force a transient manually
+    pattern = np.ones((64, 64), dtype=np.float32)
+    gen._active_transients.append((0.0, 1e-3, pattern))
+    assert len(gen._active_transients) == 1
+    gen.randomize()
+    assert len(gen._active_transients) == 0
+
+
+def test_transient_disabled_by_default(grid: SpatialGrid) -> None:
+    """With transient_enabled=False, no transients spawn."""
+    cfg = DisturbanceConfig(seed=0, transient_enabled=False)
+    gen = DisturbanceGenerator(grid, cfg)
+    for _ in range(100):
+        gen.generate(t=float(_) * 0.001)
+    assert len(gen._active_transients) == 0

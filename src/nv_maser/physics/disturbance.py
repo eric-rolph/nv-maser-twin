@@ -30,6 +30,11 @@ class DisturbanceGenerator:
         self.config = config
         self.rng = np.random.default_rng(config.seed)
 
+        # Transient state: list of (onset_time, amplitude, spatial_pattern)
+        self._active_transients: list[
+            tuple[float, float, NDArray[np.float32]]
+        ] = []
+
         # Precompute mode parameters for temporal evolution
         self._init_modes()
 
@@ -53,6 +58,9 @@ class DisturbanceGenerator:
         """
         Generate a disturbance field at time t.
 
+        Includes spatial harmonics, mains hum, transient spikes, and DC drift
+        when enabled in config.
+
         Args:
             t: Time in seconds. At t=0, phases are as initialized.
 
@@ -75,7 +83,52 @@ class DisturbanceGenerator:
         spatial = kx * x + ky * y + phi + 2.0 * np.pi * drift * t
         disturbance = np.sum(A * np.sin(spatial), axis=0)
 
+        # ── Mains hum (50/60 Hz sinusoidal interference) ─────────
+        cfg = self.config
+        if cfg.mains_hum_enabled and cfg.mains_hum_amplitude_tesla > 0:
+            # Spatially uniform oscillation at mains frequency
+            hum = cfg.mains_hum_amplitude_tesla * np.sin(
+                2.0 * np.pi * cfg.mains_hum_frequency_hz * t
+            )
+            disturbance = disturbance + hum
+
+        # ── Transient spikes (Poisson process, exponential decay) ─
+        if cfg.transient_enabled and cfg.transient_rate_hz > 0 and t > 0:
+            self._maybe_spawn_transient(t)
+            for onset, amp, pattern in self._active_transients:
+                dt = t - onset
+                if dt >= 0:
+                    envelope = amp * np.exp(-dt / cfg.transient_decay_time_s)
+                    disturbance = disturbance + envelope * pattern
+            # Prune decayed transients (< 1% of peak)
+            self._active_transients = [
+                (onset, amp, pat)
+                for onset, amp, pat in self._active_transients
+                if amp * np.exp(-(t - onset) / cfg.transient_decay_time_s) > 0.01 * amp
+            ]
+
+        # ── DC drift (slow linear ramp) ──────────────────────────
+        if cfg.dc_drift_enabled and cfg.dc_drift_rate_tesla_per_s > 0:
+            disturbance = disturbance + cfg.dc_drift_rate_tesla_per_s * t
+
         return disturbance.astype(np.float32)
+
+    def _maybe_spawn_transient(self, t: float) -> None:
+        """Probabilistically spawn a new transient event."""
+        cfg = self.config
+        # Expected number of events per generate() call interval
+        # Use a small dt approximation (assume generate called ~every ms)
+        dt_approx = 1e-3
+        p = cfg.transient_rate_hz * dt_approx
+        if self.rng.random() < p:
+            pattern = self.rng.standard_normal(
+                (self.grid.size, self.grid.size)
+            ).astype(np.float32)
+            # Smooth the pattern spatially to make it physically plausible
+            pattern = pattern / (np.abs(pattern).max() + 1e-20)
+            self._active_transients.append(
+                (t, cfg.transient_amplitude_tesla, pattern)
+            )
 
     def generate_batch(self, batch_size: int) -> NDArray[np.float32]:
         """
@@ -98,3 +151,4 @@ class DisturbanceGenerator:
     def randomize(self) -> None:
         """Re-randomize mode parameters (public interface for RL env reset)."""
         self._init_modes()
+        self._active_transients.clear()
