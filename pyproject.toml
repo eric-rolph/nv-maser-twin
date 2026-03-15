@@ -23,6 +23,7 @@ dev = [
     "ipykernel",
     "jupyter",
 ]
+api = ["fastapi>=0.110.0", "uvicorn[standard]>=0.27.0"]
 
 [project.scripts]
 nv-maser = "nv_maser.main:main"

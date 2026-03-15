@@ -100,10 +100,6 @@ def cmd_visualize_coils(config: SimConfig) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="NV Maser Digital Twin")
     parser.add_argument(
-        "command",
-        choices=["train", "demo", "evaluate", "visualize-coils"],
-    )
-    parser.add_argument(
         "--config", type=str, default=None, help="Path to YAML config override"
     )
     parser.add_argument(
@@ -115,6 +111,21 @@ def main() -> None:
     parser.add_argument("--arch", type=str, default=None, choices=["cnn", "mlp"])
     parser.add_argument("--epochs", type=int, default=None)
     parser.add_argument("--samples", type=int, default=None)
+
+    subparsers = parser.add_subparsers(dest="command", required=True)
+    subparsers.add_parser("train", help="Train the shimming controller")
+    subparsers.add_parser("demo", help="Run the real-time dashboard")
+    subparsers.add_parser("evaluate", help="Evaluate on test disturbances")
+    subparsers.add_parser("visualize-coils", help="Plot coil influence matrix")
+
+    serve_parser = subparsers.add_parser("serve", help="Launch FastAPI inference server")
+    serve_parser.add_argument(
+        "--host", type=str, default="127.0.0.1", help="Bind host (default: 127.0.0.1)"
+    )
+    serve_parser.add_argument(
+        "--port", type=int, default=8000, help="Bind port (default: 8000)"
+    )
+
     args = parser.parse_args()
 
     config = SimConfig()
@@ -138,6 +149,16 @@ def main() -> None:
         config.training.epochs = args.epochs
     if args.samples:
         config.training.num_samples = args.samples
+
+    if args.command == "serve":
+        import uvicorn
+        uvicorn.run(
+            "nv_maser.api.server:app",
+            host=args.host,
+            port=args.port,
+            reload=False,
+        )
+        return
 
     commands = {
         "train": cmd_train,
