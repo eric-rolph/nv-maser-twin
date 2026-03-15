@@ -45,6 +45,7 @@ class _Metrics:
 
 
 _metrics = _Metrics()
+_start_time = time.time()
 
 
 # Global state
@@ -129,6 +130,9 @@ class HealthResponse(BaseModel):
     status: str
     model_loaded: bool
     grid_size: int
+    arch: str
+    coils: int
+    uptime_s: float
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -137,6 +141,9 @@ async def health():
         status="ok",
         model_loaded=_model is not None,
         grid_size=_config.grid.size if _config else 0,
+        arch=_config.model.architecture.value if _config else "unknown",
+        coils=_config.coils.num_coils if _config else 0,
+        uptime_s=round(time.time() - _start_time, 2),
     )
 
 
@@ -207,5 +214,39 @@ async def metrics() -> str:
         "# HELP nv_maser_shim_latency_ms_avg Average /shim inference latency (ms)",
         "# TYPE nv_maser_shim_latency_ms_avg gauge",
         f"nv_maser_shim_latency_ms_avg {avg_lat:.4f}",
+        "# HELP nv_maser_arch Architecture in use",
+        "# TYPE nv_maser_arch gauge",
+        f'nv_maser_arch{{arch="{_config.model.architecture.value if _config else "unknown"}"}}1',
+        "# HELP nv_maser_coils Number of shimming coils",
+        "# TYPE nv_maser_coils gauge",
+        f"nv_maser_coils {_config.coils.num_coils if _config else 0}",
     ]
     return "\n".join(lines) + "\n"
+
+
+class ReloadResponse(BaseModel):
+    status: str
+    checkpoint: str
+    arch: str
+
+
+@app.post("/reload", response_model=ReloadResponse)
+async def reload_model():
+    """Reload the model checkpoint from disk (hot-reload without server restart)."""
+    global _model
+    if _model is None or _config is None:
+        raise HTTPException(status_code=503, detail="Server not initialised")
+    import pathlib
+    ckpt = pathlib.Path("checkpoints/best.pt")
+    if not ckpt.exists():
+        raise HTTPException(status_code=404, detail="No checkpoint found at checkpoints/best.pt")
+    saved = torch.load(ckpt, map_location="cpu")
+    state_dict = saved.get("model_state", saved) if isinstance(saved, dict) else saved
+    _model.load_state_dict(state_dict)
+    _model.eval()
+    logger.info("Model reloaded from checkpoint: %s", ckpt)
+    return ReloadResponse(
+        status="reloaded",
+        checkpoint=str(ckpt),
+        arch=_config.model.architecture.value,
+    )

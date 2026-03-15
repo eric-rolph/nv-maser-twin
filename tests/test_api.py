@@ -185,3 +185,37 @@ def test_metrics_counts_requests(client):
             break
     else:
         pytest.fail("nv_maser_shim_requests_total not found in /metrics output")
+
+
+# ---------------------------------------------------------------------------
+# /reload tests
+# ---------------------------------------------------------------------------
+
+def test_reload_no_checkpoint(client):
+    """POST /reload returns 404 when no checkpoint file exists in test env."""
+    from unittest.mock import patch
+    with patch("pathlib.Path.exists", return_value=False):
+        r = client.post("/reload")
+    assert r.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# /health enriched field tests
+# ---------------------------------------------------------------------------
+
+def test_health_has_arch_field(client):
+    """GET /health response includes 'arch' key."""
+    r = client.get("/health")
+    assert r.status_code == 200
+    assert "arch" in r.json()
+
+
+# ---------------------------------------------------------------------------
+# /metrics enriched label tests
+# ---------------------------------------------------------------------------
+
+def test_metrics_has_arch_label(client):
+    """GET /metrics response includes nv_maser_arch label line."""
+    r = client.get("/metrics")
+    assert r.status_code == 200
+    assert "nv_maser_arch" in r.text

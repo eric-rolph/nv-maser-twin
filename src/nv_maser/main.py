@@ -35,8 +35,10 @@ def _deep_merge_config(base: SimConfig, overrides: dict) -> SimConfig:
 def cmd_train(config: SimConfig) -> None:
     from .model.training import Trainer
     from .viz.plots import plot_training_history
+    from .tracking import ExperimentTracker
 
-    trainer = Trainer(config)
+    tracker = ExperimentTracker()
+    trainer = Trainer(config, tracker=tracker)
     history = trainer.train()
     plot_training_history(history, save_path="training_curves.png")
 
@@ -147,6 +149,20 @@ def main() -> None:
         "--port", type=int, default=8000, help="Bind port (default: 8000)"
     )
 
+    export_parser = subparsers.add_parser("export", help="Export model to ONNX")
+    export_parser.add_argument(
+        "--output", type=str, default="checkpoints/model.onnx",
+        help="Output .onnx path"
+    )
+    export_parser.add_argument(
+        "--checkpoint", type=str, default="checkpoints/best.pt",
+        help="Checkpoint to load (skipped if missing)"
+    )
+    export_parser.add_argument(
+        "--opset", type=int, default=17,
+        help="ONNX opset version"
+    )
+
     args = parser.parse_args()
 
     config = SimConfig()
@@ -173,6 +189,18 @@ def main() -> None:
 
     if args.command == "dataset":
         cmd_dataset(config, args)
+        return
+
+    if args.command == "export":
+        from .export import export_model
+        result = export_model(
+            config,
+            output_path=args.output,
+            checkpoint_path=args.checkpoint,
+            opset_version=args.opset,
+        )
+        print(f"[export] ONNX model written to {result.path}")
+        print(f"         arch={result.arch} | grid={result.grid_size} | coils={result.num_coils} | opset={result.opset}")
         return
 
     if args.command == "serve":

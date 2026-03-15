@@ -25,6 +25,10 @@ dev = [
     "httpx>=0.27.0",
 ]
 api = ["fastapi>=0.110.0", "uvicorn[standard]>=0.27.0"]
+onnx = [
+    "onnxscript>=0.1.0",
+    "onnxruntime>=1.16",
+]
 
 [project.scripts]
 nv-maser = "nv_maser.main:main"
@@ -39,3 +43,8 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-v"
+filterwarnings = [
+    "ignore:.*dynamic_axes.*:UserWarning",
+    "ignore:.*from_dynamic_axes_to_dynamic_shapes.*:DeprecationWarning",
+    "ignore:.*isinstance.*LeafSpec.*:FutureWarning",
+]

@@ -28,9 +28,11 @@ class Trainer:
         4. Early stop if validation loss plateaus.
     """
 
-    def __init__(self, config: SimConfig) -> None:
+    def __init__(self, config: SimConfig, tracker=None) -> None:
         self.config = config
         self.device = config.resolve_device()
+        self._tracker = tracker
+        self._run_id: int | None = None
 
         # Build physics environment
         self.env = FieldEnvironment(config)
@@ -149,6 +151,13 @@ class Trainer:
 
         history: dict[str, list[float]] = {"train_loss": [], "val_loss": []}
 
+        if self._tracker is not None:
+            self._run_id = self._tracker.start_run(
+                arch=self.config.model.architecture.value,
+                config=self.config,
+                notes=f"lr={tc.learning_rate} wd={tc.weight_decay}",
+            )
+
         print(
             f"[Trainer] Training {type(self.model).__name__} "
             f"for {tc.epochs} epochs on {self.device}"
@@ -183,6 +192,14 @@ class Trainer:
             history["train_loss"].append(epoch_train_loss)
             history["val_loss"].append(epoch_val_loss)
 
+            if self._tracker is not None and self._run_id is not None:
+                self._tracker.log_epoch(
+                    self._run_id,
+                    epoch=epoch + 1,
+                    train_loss=epoch_train_loss,
+                    val_loss=epoch_val_loss,
+                )
+
             print(
                 f"  Epoch {epoch+1:3d}/{tc.epochs}  "
                 f"train={epoch_train_loss:.4e}  val={epoch_val_loss:.4e}"
@@ -209,6 +226,9 @@ class Trainer:
                         f"(no improvement for {tc.early_stopping_patience} epochs)"
                     )
                     break
+
+        if self._tracker is not None and self._run_id is not None:
+            self._tracker.finish_run(self._run_id, best_val_loss=self.best_val_loss)
 
         print(f"[Trainer] Best val loss: {self.best_val_loss:.4e}")
         return history
