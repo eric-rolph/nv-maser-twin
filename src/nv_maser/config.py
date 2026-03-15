@@ -107,6 +107,76 @@ class CoilConfig(BaseModel):
     )
 
 
+class NVConfig(BaseModel):
+    """NV center spin physics parameters."""
+
+    zero_field_splitting_ghz: float = Field(
+        2.87, description="Zero-field splitting D (GHz) for NV⁻ ground state"
+    )
+    gamma_e_ghz_per_t: float = Field(
+        28.025, description="Electron gyromagnetic ratio γe (GHz/T)"
+    )
+    t2_star_us: float = Field(
+        1.0,
+        gt=0,
+        description=(
+            "T2* ensemble dephasing time (μs). "
+            "Determines homogeneous linewidth Γ_h = 1/(π·T2*). "
+            "Good CVD diamond: 1-10 μs. Mediocre: 0.1-1 μs."
+        ),
+    )
+    nv_density_per_cm3: float = Field(
+        1e17,
+        description=(
+            "NV center concentration (per cm³). "
+            "1 ppm ≈ 1.76×10¹⁷/cm³ in diamond."
+        ),
+    )
+    pump_efficiency: float = Field(
+        0.5,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Fraction of NV centers effectively inverted by optical pumping. "
+            "Ideal saturation: ~0.5. Realistic with losses: 0.2-0.4."
+        ),
+    )
+    diamond_thickness_mm: float = Field(
+        0.5,
+        gt=0,
+        description="Diamond thickness along cavity axis (mm).",
+    )
+
+
+class MaserConfig(BaseModel):
+    """Microwave maser cavity parameters."""
+
+    cavity_q: float = Field(
+        10_000,
+        gt=0,
+        description="Loaded quality factor of the microwave cavity.",
+    )
+    cavity_frequency_ghz: float = Field(
+        1.47,
+        description=(
+            "Cavity resonant frequency (GHz). "
+            "Should match one NV transition: D ± γe·B₀. "
+            "Default: D - γe·0.05T ≈ 1.47 GHz (lower branch at 50 mT)."
+        ),
+    )
+    min_gain_budget: float = Field(
+        0.5,
+        gt=0,
+        le=1.0,
+        description=(
+            "Minimum gain budget (Γ_h/Γ_eff) for maser oscillation. "
+            "Below this, inhomogeneous broadening kills the gain. "
+            "Depends on cavity Q, NV concentration, pump power. "
+            "0.5 = maser needs ≥50%% of peak gain to overcome cavity losses."
+        ),
+    )
+
+
 class ModelConfig(BaseModel):
     """Neural network controller parameters."""
 
@@ -185,6 +255,8 @@ class SimConfig(BaseModel):
     field: FieldConfig = FieldConfig()
     disturbance: DisturbanceConfig = DisturbanceConfig()
     coils: CoilConfig = CoilConfig()
+    nv: NVConfig = NVConfig()
+    maser: MaserConfig = MaserConfig()
     model: ModelConfig = ModelConfig()
     training: TrainingConfig = TrainingConfig()
     viz: VizConfig = VizConfig()

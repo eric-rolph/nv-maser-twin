@@ -24,6 +24,19 @@ coils:
   max_current_amps: 1.0
   field_scale_factor: 0.005  # = max_amplitude_tesla; each coil at 1A can cancel one full-amplitude mode
 
+nv:
+  zero_field_splitting_ghz: 2.87
+  gamma_e_ghz_per_t: 28.025
+  t2_star_us: 1.0             # T2* dephasing time; Γ_h = 1/(π·T2*) ≈ 0.318 MHz
+  nv_density_per_cm3: 1.0e+17  # ~0.6 ppm NV concentration
+  pump_efficiency: 0.5         # fraction of NVs inverted
+  diamond_thickness_mm: 0.5
+
+maser:
+  cavity_q: 10000
+  cavity_frequency_ghz: 1.47   # D - γe·B₀ = 2.87 - 28.025×0.05 ≈ 1.47 GHz
+  min_gain_budget: 0.5         # maser needs ≥50% of peak gain
+
 model:
   architecture: cnn       # cnn | mlp | lstm
   cnn_channels: [16, 32, 64]

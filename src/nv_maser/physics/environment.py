@@ -12,6 +12,7 @@ from .grid import SpatialGrid
 from .base_field import compute_base_field
 from .disturbance import DisturbanceGenerator
 from .coils import ShimCoilArray
+from .maser_gain import compute_maser_metrics, max_tolerable_b_std
 
 
 class FieldEnvironment:
@@ -91,11 +92,17 @@ class FieldEnvironment:
         ppm = ((max_b - min_b) / mean_b * 1e6) if mean_b > 0 else float("inf")
         max_dev = float(np.max(np.abs(active - self.config.field.b0_tesla)))
 
+        # Maser gain metrics from NV spin physics
+        maser = compute_maser_metrics(
+            net_field, mask, self.config.nv, self.config.maser
+        )
+
         return {
             "variance": var_b,
             "std": std_b,
             "ppm": ppm,
             "max_deviation": max_dev,
+            **maser,
         }
 
     def generate_training_data(
