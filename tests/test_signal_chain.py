@@ -17,6 +17,7 @@ from nv_maser.physics.signal_chain import (
     SignalChainBudget,
     compute_amplifier_noise,
     compute_maser_emission_power,
+    compute_maser_noise_temperature,
     compute_quantisation_noise,
     compute_signal_chain_budget,
     compute_snr_vs_field_uniformity,
@@ -309,3 +310,62 @@ class TestEnvironmentSNRIntegration:
         m_good = env.compute_uniformity_metric(uniform)
 
         assert m_good["snr_db"] >= m_bad["snr_db"]
+
+
+# ── Maser noise temperature ──────────────────────────────────────
+
+
+class TestMaserNoiseTemperature:
+    def test_below_threshold_finite(self) -> None:
+        """Q_m > Q₀ gap → finite positive noise temperature."""
+        t = compute_maser_noise_temperature(q_magnetic=500, cavity_q=10_000)
+        assert 0 < t < float("inf")
+
+    def test_formula(self) -> None:
+        """Verify T_a = Q_m/(Q₀−Q_m)·T_bath + Q₀/(Q₀−Q_m)·T_s."""
+        q_m, q0, t_bath, t_s = 500, 10_000, 300.0, 50.0
+        expected = q_m / (q0 - q_m) * t_bath + q0 / (q0 - q_m) * t_s
+        actual = compute_maser_noise_temperature(q_m, q0, t_bath, t_s)
+        assert actual == pytest.approx(expected, rel=1e-10)
+
+    def test_zero_spin_temp(self) -> None:
+        """Fully inverted (T_s=0) → T_a = Q_m/(Q₀−Q_m)·T_bath."""
+        q_m, q0 = 500, 10_000
+        t = compute_maser_noise_temperature(q_m, q0, 300.0, 0.0)
+        assert t == pytest.approx(q_m / (q0 - q_m) * 300.0, rel=1e-10)
+
+    def test_oscillation_threshold_inf(self) -> None:
+        """Q_m ≥ Q₀ → above threshold → inf."""
+        assert compute_maser_noise_temperature(10_000, 10_000) == float("inf")
+        assert compute_maser_noise_temperature(20_000, 10_000) == float("inf")
+
+    def test_higher_q_lower_noise(self) -> None:
+        """Weaker magnetic loading (higher Q_m) → lower noise temp."""
+        t_lo = compute_maser_noise_temperature(200, 10_000)
+        t_hi = compute_maser_noise_temperature(2000, 10_000)
+        assert t_lo < t_hi
+
+
+# ── New environment metrics ───────────────────────────────────────
+
+
+class TestNewEnvironmentMetrics:
+    def test_magnetic_q_in_metrics(self) -> None:
+        config = SimConfig()
+        env = FieldEnvironment(config)
+        metrics = env.compute_uniformity_metric(env.distorted_field)
+        assert "q_magnetic" in metrics
+        assert metrics["q_magnetic"] > 0
+
+    def test_spectral_overlap_in_metrics(self) -> None:
+        config = SimConfig()
+        env = FieldEnvironment(config)
+        metrics = env.compute_uniformity_metric(env.distorted_field)
+        assert "spectral_overlap_R" in metrics
+        assert metrics["spectral_overlap_R"] > 0
+
+    def test_maser_noise_temp_in_metrics(self) -> None:
+        config = SimConfig()
+        env = FieldEnvironment(config)
+        metrics = env.compute_uniformity_metric(env.distorted_field)
+        assert "maser_noise_temperature_k" in metrics

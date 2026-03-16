@@ -112,7 +112,11 @@ def compute_maser_emission_power(
     # Use a fixed 3 mm active radius (conservative for a 6 mm active zone)
     active_radius_m = 3.0e-3
     volume_m3 = math.pi * active_radius_m**2 * thickness_m
-    n_nv = nv_config.nv_density_per_cm3 * 1e6 * volume_m3  # convert /cm³ to /m³
+    n_nv = (
+        nv_config.nv_density_per_cm3 * 1e6
+        * volume_m3
+        * nv_config.orientation_fraction
+    )
 
     # Stimulated emission rate ≈ homogeneous linewidth (at threshold)
     t2_s = nv_config.t2_star_us * 1e-6
@@ -184,6 +188,43 @@ def compute_quantisation_noise(
     """
     p_fs_w = 1e-3 * 10.0 ** (full_scale_dbm / 10.0)  # dBm → W
     return p_fs_w / (1.5 * 4.0**adc_bits)
+
+
+def compute_maser_noise_temperature(
+    q_magnetic: float,
+    cavity_q: float,
+    bath_temperature_k: float = 300.0,
+    spin_temperature_k: float = 0.0,
+) -> float:
+    """
+    Maser amplifier noise temperature (Wang 2024, Eq. 4).
+
+    T_a = Q_m / (Q₀ − Q_m) · T_bath  +  Q₀ / (Q₀ − Q_m) · T_s
+
+    For a fully inverted maser (T_s ≈ 0), the spin contribution
+    vanishes and T_a ≈ Q_m / (Q₀ − Q_m) · T_bath.
+
+    When Q_m ≥ Q₀ the medium compensates all cavity loss and the
+    formula diverges — the system is at or above oscillation
+    threshold and the amplifier model breaks down.  We return inf.
+
+    Args:
+        q_magnetic: Magnetic quality factor Q_m (positive for gain medium).
+        cavity_q: Unloaded cavity quality factor Q₀.
+        bath_temperature_k: Physical temperature of cavity walls (K).
+        spin_temperature_k: Effective spin temperature (K); ~0 for
+            a fully inverted ensemble.
+
+    Returns:
+        Amplifier noise temperature T_a (K).  inf if Q_m ≥ Q₀.
+    """
+    denom = cavity_q - q_magnetic
+    if denom <= 0:
+        return float("inf")
+    return (
+        q_magnetic / denom * bath_temperature_k
+        + cavity_q / denom * spin_temperature_k
+    )
 
 
 def compute_signal_chain_budget(

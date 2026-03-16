@@ -6,11 +6,15 @@ import pytest
 from nv_maser.config import CavityConfig, MaserConfig, NVConfig
 from nv_maser.physics.cavity import (
     CavityProperties,
+    MagneticQResult,
     ThresholdResult,
     compute_cavity_properties,
+    compute_effective_q,
     compute_full_threshold,
+    compute_magnetic_q,
     compute_maser_threshold,
     compute_n_effective,
+    compute_spectral_overlap,
     _HBAR,
     _MU0,
 )
@@ -208,3 +212,168 @@ class TestFullThreshold:
         result = compute_full_threshold(nv_cfg, maser_cfg, cavity_cfg, 0.0, 1e6)
         assert result.cooperativity == 0.0
         assert result.masing is False
+
+
+# ── Orientation fraction affects N_eff ────────────────────────────
+
+
+class TestOrientationFraction:
+    def test_default_is_quarter(self) -> None:
+        cfg = NVConfig()
+        assert cfg.orientation_fraction == 0.25
+
+    def test_n_eff_scales_with_orientation(self, cavity_cfg: CavityConfig) -> None:
+        nv_full = NVConfig(orientation_fraction=1.0)
+        nv_quarter = NVConfig(orientation_fraction=0.25)
+        n_full = compute_n_effective(nv_full, cavity_cfg, 1.0)
+        n_quarter = compute_n_effective(nv_quarter, cavity_cfg, 1.0)
+        assert n_full == pytest.approx(4.0 * n_quarter, rel=1e-10)
+
+    def test_default_config_still_mases(self, maser_cfg: MaserConfig,
+                                         cavity_cfg: CavityConfig) -> None:
+        """Default NVConfig (orientation_fraction=0.25) should still reach threshold."""
+        nv = NVConfig()
+        result = compute_full_threshold(nv, maser_cfg, cavity_cfg, 1.0, 1e6)
+        assert result.masing is True
+
+
+# ── Magnetic quality factor ───────────────────────────────────────
+
+
+class TestMagneticQ:
+    def test_returns_dataclass(self, nv_cfg: NVConfig,
+                                cavity_cfg: CavityConfig) -> None:
+        result = compute_magnetic_q(nv_cfg, cavity_cfg)
+        assert isinstance(result, MagneticQResult)
+
+    def test_positive_q(self, nv_cfg: NVConfig,
+                         cavity_cfg: CavityConfig) -> None:
+        result = compute_magnetic_q(nv_cfg, cavity_cfg)
+        assert result.q_magnetic > 0
+
+    def test_higher_density_lower_q(self, cavity_cfg: CavityConfig) -> None:
+        """More inverted spins → stronger magnetic loading → lower Q_m."""
+        nv_lo = NVConfig(nv_density_per_cm3=1e16)
+        nv_hi = NVConfig(nv_density_per_cm3=1e17)
+        q_lo = compute_magnetic_q(nv_lo, cavity_cfg).q_magnetic
+        q_hi = compute_magnetic_q(nv_hi, cavity_cfg).q_magnetic
+        assert q_hi < q_lo  # more spins → lower Q
+
+    def test_longer_t2_lower_q(self, cavity_cfg: CavityConfig) -> None:
+        nv_short = NVConfig(t2_star_us=0.5)
+        nv_long = NVConfig(t2_star_us=2.0)
+        q_short = compute_magnetic_q(nv_short, cavity_cfg).q_magnetic
+        q_long = compute_magnetic_q(nv_long, cavity_cfg).q_magnetic
+        assert q_long < q_short
+
+    def test_fill_factor_affects_q(self) -> None:
+        nv = NVConfig()
+        c_small = CavityConfig(fill_factor=0.005)
+        c_large = CavityConfig(fill_factor=0.05)
+        q_small = compute_magnetic_q(nv, c_small).q_magnetic
+        q_large = compute_magnetic_q(nv, c_large).q_magnetic
+        assert q_large < q_small
+
+    def test_orientation_affects_q(self, cavity_cfg: CavityConfig) -> None:
+        nv_full = NVConfig(orientation_fraction=1.0)
+        nv_quarter = NVConfig(orientation_fraction=0.25)
+        q_full = compute_magnetic_q(nv_full, cavity_cfg).q_magnetic
+        q_quarter = compute_magnetic_q(nv_quarter, cavity_cfg).q_magnetic
+        assert q_full < q_quarter  # more oriented spins → lower Q
+
+
+# ── Spectral overlap ratio ────────────────────────────────────────
+
+
+class TestSpectralOverlap:
+    def test_ratio_formula(self, props: CavityProperties) -> None:
+        r = compute_spectral_overlap(props, spin_linewidth_hz=1e6)
+        assert r == pytest.approx(props.cavity_linewidth_hz / 1e6, rel=1e-10)
+
+    def test_narrower_spin_line_larger_r(self, props: CavityProperties) -> None:
+        r_wide = compute_spectral_overlap(props, 1e7)
+        r_narrow = compute_spectral_overlap(props, 1e5)
+        assert r_narrow > r_wide
+
+    def test_zero_linewidth_returns_inf(self, props: CavityProperties) -> None:
+        r = compute_spectral_overlap(props, 0.0)
+        assert r == float("inf")
+
+
+# ── Q-boosting (Wang 2024) ────────────────────────────────────────
+
+
+class TestEffectiveQ:
+    def test_no_boost(self) -> None:
+        """G_loop = 0 → Q_eff = Q_0."""
+        cfg = MaserConfig(cavity_q=10_000, q_boost_gain=0.0)
+        assert compute_effective_q(cfg) == pytest.approx(10_000, rel=1e-10)
+
+    def test_moderate_boost(self) -> None:
+        """G_loop = 0.5 → Q_eff = 2 × Q_0."""
+        cfg = MaserConfig(cavity_q=10_000, q_boost_gain=0.5)
+        assert compute_effective_q(cfg) == pytest.approx(20_000, rel=1e-10)
+
+    def test_high_boost(self) -> None:
+        """G_loop = 0.9 → Q_eff = 10 × Q_0."""
+        cfg = MaserConfig(cavity_q=10_000, q_boost_gain=0.9)
+        assert compute_effective_q(cfg) == pytest.approx(100_000, rel=1e-10)
+
+    def test_wang_2024_reproduction(self) -> None:
+        """Wang et al. 2024: Q_L from 1.1e4 to 6.5e5 → G ≈ 0.9831."""
+        q0 = 1.1e4
+        q_target = 6.5e5
+        g = 1.0 - q0 / q_target  # ≈ 0.9831
+        cfg = MaserConfig(cavity_q=q0, q_boost_gain=g)
+        assert compute_effective_q(cfg) == pytest.approx(q_target, rel=1e-3)
+
+    def test_boost_monotonic(self) -> None:
+        """Higher gain → higher Q_eff."""
+        q0 = 10_000
+        gains = [0.0, 0.3, 0.6, 0.9]
+        q_effs = [compute_effective_q(MaserConfig(cavity_q=q0, q_boost_gain=g)) for g in gains]
+        for i in range(len(q_effs) - 1):
+            assert q_effs[i + 1] > q_effs[i]
+
+    def test_small_gain_small_effect(self) -> None:
+        """G_loop = 0.01 → ~1% Q increase."""
+        cfg = MaserConfig(cavity_q=10_000, q_boost_gain=0.01)
+        q_eff = compute_effective_q(cfg)
+        ratio = q_eff / 10_000
+        assert ratio == pytest.approx(1.0 / 0.99, rel=1e-6)
+
+
+class TestQBoostEnvironmentIntegration:
+    def test_q_boost_metrics_present(self) -> None:
+        from nv_maser.config import SimConfig
+        from nv_maser.physics.environment import FieldEnvironment
+
+        cfg = SimConfig(maser=MaserConfig(cavity_q=10_000, q_boost_gain=0.5))
+        env = FieldEnvironment(cfg)
+        result = env.compute_uniformity_metric(env.distorted_field)
+        assert "q_boost_effective_q" in result
+        assert result["q_boost_effective_q"] == pytest.approx(20_000, rel=1e-6)
+        assert result["q_boost_gain"] == pytest.approx(0.5, rel=1e-10)
+
+    def test_no_q_boost_no_metrics(self) -> None:
+        from nv_maser.config import SimConfig
+        from nv_maser.physics.environment import FieldEnvironment
+
+        cfg = SimConfig(maser=MaserConfig(cavity_q=10_000, q_boost_gain=0.0))
+        env = FieldEnvironment(cfg)
+        result = env.compute_uniformity_metric(env.distorted_field)
+        assert "q_boost_effective_q" not in result
+
+    def test_q_boost_lowers_threshold(self) -> None:
+        """Q-boosting should increase cooperativity (lower threshold)."""
+        from nv_maser.config import SimConfig
+        from nv_maser.physics.environment import FieldEnvironment
+
+        cfg_no_boost = SimConfig(maser=MaserConfig(cavity_q=10_000, q_boost_gain=0.0))
+        cfg_boosted = SimConfig(maser=MaserConfig(cavity_q=10_000, q_boost_gain=0.9))
+        env_no = FieldEnvironment(cfg_no_boost)
+        env_yes = FieldEnvironment(cfg_boosted)
+        r_no = env_no.compute_uniformity_metric(env_no.distorted_field)
+        r_yes = env_yes.compute_uniformity_metric(env_yes.distorted_field)
+        # Higher Q → higher cooperativity
+        assert r_yes["cooperativity"] > r_no["cooperativity"]

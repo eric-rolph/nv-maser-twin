@@ -304,6 +304,26 @@ class NVConfig(BaseModel):
             "Ideal saturation: ~0.5. Realistic with losses: 0.2-0.4."
         ),
     )
+    orientation_fraction: float = Field(
+        0.25,
+        gt=0.0,
+        le=1.0,
+        description=(
+            "Fraction of NV centres aligned with B₀. "
+            "Diamond has 4 equivalent ⟨111⟩ axes; for B₀ along one axis, "
+            "only 1/4 of NV centres are resonant. "
+            "Kollarics et al. 2024, Breeze et al. 2018."
+        ),
+    )
+    t1_ms: float = Field(
+        5.0,
+        gt=0,
+        description=(
+            "Spin-lattice relaxation time T₁ (ms). "
+            "NV⁻ at room temperature: ~5 ms. "
+            "Used by the Maxwell-Bloch solver for inversion recovery."
+        ),
+    )
     diamond_thickness_mm: float = Field(
         0.5,
         gt=0,
@@ -346,6 +366,17 @@ class MaserConfig(BaseModel):
             "Cavity coupling factor β = Q_ext / Q_loaded. "
             "Fraction of intracavity power extracted at the coupling port. "
             "Critical coupling β = 0.5. Over-coupled > 0.5."
+        ),
+    )
+    q_boost_gain: float = Field(
+        0.0,
+        ge=0.0,
+        lt=1.0,
+        description=(
+            "Electronic feedback loop gain for Q-boosting (0 to <1). "
+            "Q_eff = Q_0 / (1 - G_loop). 0 = no boost (default). "
+            "Wang et al. 2024 boosted Q_L from 1.1e4 to 6.5e5 (G≈0.983). "
+            "Must be < 1 for stability."
         ),
     )
 
@@ -437,6 +468,40 @@ class OpticalPumpConfig(BaseModel):
             "NV ground-state spin-lattice relaxation T₁ (ms). "
             "Room temperature: 5-6 ms. Sets the decay rate competing "
             "against optical pumping."
+        ),
+    )
+    n_depth_slices: int = Field(
+        1,
+        ge=1,
+        description=(
+            "Number of depth slices for spatially-resolved pump model. "
+            "1 = uniform (legacy). >1 = depth-resolved Beer-Lambert. "
+            "At high NV density (≳10 ppm) pump attenuation is significant. "
+            "20 slices is typically sufficient. Kollarics et al. 2024."
+        ),
+    )
+    pulsed: bool = Field(
+        False,
+        description=(
+            "Enable pulsed pump mode. When True, the pump laser is modulated "
+            "with pulse_duration_us ON, then OFF until the next period. "
+            "Long et al. 2025 used 7–200 µs LED pulses."
+        ),
+    )
+    pulse_duration_us: float = Field(
+        100.0,
+        gt=0,
+        description=(
+            "Pump pulse duration (µs). Time the pump is ON per cycle. "
+            "Long et al. 2025: 7–200 µs at ~130 W peak."
+        ),
+    )
+    pulse_period_us: float = Field(
+        1000.0,
+        gt=0,
+        description=(
+            "Pump pulse repetition period (µs). "
+            "Duty cycle = pulse_duration_us / pulse_period_us."
         ),
     )
 
@@ -825,6 +890,153 @@ class VizConfig(BaseModel):
     )
 
 
+class MaxwellBlochConfig(BaseModel):
+    """Maxwell-Bloch time-domain solver settings.
+
+    Controls the semiclassical ODE simulation of cavity–spin dynamics
+    following Wang et al., Adv. Sci. (2024), Eqs. 9-11.
+    """
+
+    enable: bool = Field(
+        False,
+        description=(
+            "Enable Maxwell-Bloch time-domain simulation. "
+            "When False, MB metrics are omitted from environment output."
+        ),
+    )
+    drive_amplitude_hz: float = Field(
+        0.0,
+        ge=0,
+        description=(
+            "External drive amplitude V/(2π) in Hz. "
+            "0 = free-running maser; >0 = amplifier mode."
+        ),
+    )
+    t_max_us: float = Field(
+        100.0,
+        gt=0,
+        description="Maximum simulation time (μs).",
+    )
+    n_time_points: int = Field(
+        1000,
+        gt=10,
+        description="Number of output time points.",
+    )
+    solver_method: str = Field(
+        "RK45",
+        description="SciPy solve_ivp method: RK45, RK23, DOP853, Radau, BDF, LSODA.",
+    )
+
+
+class SpectralConfig(BaseModel):
+    """Frequency-resolved inversion profile settings.
+
+    Models the inhomogeneous spin ensemble as a discrete frequency grid
+    p(Δ) where Δ = ω_spin − ω_cavity.  The lineshape is q-Gaussian
+    (Tsallis distribution) which interpolates between Gaussian (q=1)
+    and Lorentzian (q=2).
+
+    Reference: Kersten et al., Nature Physics (2026), Eq. 4.
+    """
+
+    enable: bool = Field(
+        False,
+        description=(
+            "Enable spectral dynamics.  When True, the solver evolves "
+            "a frequency-resolved inversion profile p(Δ,t) instead of "
+            "a single scalar Sz."
+        ),
+    )
+    n_freq_bins: int = Field(
+        201,
+        ge=11,
+        le=10001,
+        description=(
+            "Number of discrete frequency bins in the detuning grid. "
+            "Odd value ensures Δ=0 is on the grid."
+        ),
+    )
+    freq_range_mhz: float = Field(
+        50.0,
+        gt=0,
+        description=(
+            "Half-width of the detuning grid (MHz). "
+            "Grid spans [−freq_range_mhz, +freq_range_mhz]. "
+            "Should be several times the inhomogeneous linewidth."
+        ),
+    )
+    q_parameter: float = Field(
+        1.0,
+        ge=1.0,
+        le=2.0,
+        description=(
+            "q-Gaussian shape parameter.  q=1 → Gaussian, q→2 → Lorentzian. "
+            "Controls the wing weight of the inhomogeneous lineshape."
+        ),
+    )
+    inhomogeneous_linewidth_mhz: float = Field(
+        8.65,
+        gt=0,
+        description=(
+            "Inhomogeneous broadening FWHM W/(2π) in MHz. "
+            "Kersten et al. 2026: 8.65 MHz for 10 ppm NV. "
+            "Scales roughly as √(nv_density)."
+        ),
+    )
+
+
+class DipolarConfig(BaseModel):
+    """Spin-spin dipolar interaction model settings.
+
+    Models the mean-field spectral diffusion caused by direct 1/r³
+    magnetic dipole-dipole coupling between NV centres.  The diffusion
+    refills spectral holes burned by superradiant emission.
+
+    The characteristic refilling follows a stretched exponential:
+        p(Δ=0, t) = p̄ − (p̄ − p₀) exp(−(t/T_r)^α)
+
+    with α = 1/2 as the hallmark of 3D dipolar interactions.
+
+    Reference: Kersten et al., Nature Physics (2026), Eq. 2, 8c.
+    """
+
+    enable: bool = Field(
+        False,
+        description=(
+            "Enable dipolar spectral diffusion. "
+            "Requires spectral.enable = True."
+        ),
+    )
+    refilling_time_us: float = Field(
+        11.6,
+        gt=0,
+        description=(
+            "Characteristic spectral hole refilling time T_r (μs). "
+            "Kersten et al. 2026: 11.6 μs at ~10 ppm NV density. "
+            "Scales as 1/n_NV (inversely with density)."
+        ),
+    )
+    stretch_exponent: float = Field(
+        0.5,
+        gt=0.0,
+        le=1.0,
+        description=(
+            "Stretched exponential exponent α. "
+            "α = 0.5 is the hallmark of 1/r³ dipolar interactions in 3D. "
+            "α = 1.0 recovers simple exponential."
+        ),
+    )
+    diffusion_coefficient_mhz2_per_us: float = Field(
+        0.0,
+        ge=0,
+        description=(
+            "Mean-field spectral diffusion coefficient D_ss (MHz²/μs). "
+            "When > 0, a diffusive term D_ss · d²p/dΔ² is added. "
+            "When 0, the stretched-exponential model is used instead."
+        ),
+    )
+
+
 class SimConfig(BaseModel):
     """Top-level simulation configuration."""
 
@@ -838,6 +1050,9 @@ class SimConfig(BaseModel):
     signal_chain: SignalChainConfig = SignalChainConfig()
     cavity: CavityConfig = CavityConfig()
     optical_pump: OpticalPumpConfig = OpticalPumpConfig()
+    maxwell_bloch: MaxwellBlochConfig = MaxwellBlochConfig()
+    spectral: SpectralConfig = SpectralConfig()
+    dipolar: DipolarConfig = DipolarConfig()
     feedback: FeedbackConfig = FeedbackConfig()
     thermal: ThermalConfig = ThermalConfig()
     model: ModelConfig = ModelConfig()

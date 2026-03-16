@@ -35,6 +35,32 @@ _MU0 = 1.2566370614e-6  # H/m  (vacuum permeability)
 _C = 2.99792458e8  # m/s
 
 
+# ── Q-boosting (Wang 2024) ────────────────────────────────────────
+
+
+def compute_effective_q(maser_config: MaserConfig) -> float:
+    """
+    Effective cavity Q with electronic feedback Q-boosting.
+
+    Q_eff = Q_0 / (1 - G_loop)
+
+    where G_loop is the electronic feedback loop gain.
+    G_loop = 0 → no boost (Q_eff = Q_0).
+    G_loop → 1 → Q_eff → ∞ (oscillation onset).
+
+    Wang et al. (2024) boosted Q_L from 1.1×10⁴ to 6.5×10⁵
+    using active dissipation compensation.
+
+    Args:
+        maser_config: Maser parameters including cavity_q and q_boost_gain.
+
+    Returns:
+        Effective quality factor after electronic Q-boosting.
+    """
+    g = maser_config.q_boost_gain
+    return maser_config.cavity_q / (1.0 - g)
+
+
 @dataclass(frozen=True)
 class CavityProperties:
     """Derived cavity-mode quantities."""
@@ -176,7 +202,13 @@ def compute_n_effective(
     v_mode_m3 = cavity_config.mode_volume_cm3 * 1e-6
     v_diamond_m3 = v_mode_m3 * cavity_config.fill_factor
     n_nv = nv_config.nv_density_per_cm3 * 1e6  # convert /cm³ → /m³
-    return n_nv * v_diamond_m3 * nv_config.pump_efficiency * gain_budget
+    return (
+        n_nv
+        * v_diamond_m3
+        * nv_config.pump_efficiency
+        * nv_config.orientation_fraction
+        * gain_budget
+    )
 
 
 def compute_full_threshold(
@@ -205,3 +237,86 @@ def compute_full_threshold(
     props = compute_cavity_properties(maser_config, cavity_config)
     n_eff = compute_n_effective(nv_config, cavity_config, gain_budget)
     return compute_maser_threshold(props, n_eff, spin_linewidth_hz)
+
+
+# ── Magnetic quality factor (Wang 2024, Eq. 1) ──────────────────
+
+
+@dataclass(frozen=True)
+class MagneticQResult:
+    """Magnetic quality factor of the inverted spin ensemble."""
+
+    q_magnetic: float  # Q_m  (dimensionless, negative → gain)
+    inverted_density_m3: float  # Δn  (inverted spins / m³)
+    fill_factor: float
+    t2_star_s: float
+
+
+def compute_magnetic_q(
+    nv_config: NVConfig,
+    cavity_config: CavityConfig,
+) -> MagneticQResult:
+    """
+    Magnetic quality factor Q_m of the active spin medium.
+
+    Q_m⁻¹ = μ₀ γₑ² Δn η T₂* / 2
+
+    where Δn is the inverted spin density (per m³), η is the
+    fill factor, and T₂* is the ensemble dephasing time.
+    A negative Q_m (inverted medium) means net gain.
+
+    Source: Wang et al. 2024, Nature Electronics 7, 780 — Eq. 1.
+
+    Args:
+        nv_config: NV centre parameters (density, pump, orientation).
+        cavity_config: Fill factor.
+
+    Returns:
+        MagneticQResult with Q_m and intermediate quantities.
+    """
+    gamma_e_rad = 2 * math.pi * nv_config.gamma_e_ghz_per_t * 1e9  # rad s⁻¹ T⁻¹
+    n_nv_m3 = nv_config.nv_density_per_cm3 * 1e6
+    delta_n = (
+        n_nv_m3
+        * nv_config.pump_efficiency
+        * nv_config.orientation_fraction
+    )
+    eta = cavity_config.fill_factor
+    t2_s = nv_config.t2_star_us * 1e-6
+
+    q_inv = _MU0 * gamma_e_rad**2 * delta_n * eta * t2_s / 2.0
+    q_m = 1.0 / q_inv if q_inv > 0 else float("inf")
+
+    return MagneticQResult(
+        q_magnetic=q_m,
+        inverted_density_m3=delta_n,
+        fill_factor=eta,
+        t2_star_s=t2_s,
+    )
+
+
+# ── Spectral overlap ratio (Wang 2024) ──────────────────────────
+
+
+def compute_spectral_overlap(
+    cavity_props: CavityProperties,
+    spin_linewidth_hz: float,
+) -> float:
+    """
+    Spectral overlap ratio R = κ / γ⊥.
+
+    R < 1 ("good-cavity" regime): cavity linewidth narrower than spin
+    line — only a fraction of inverted spins couple efficiently.
+    R > 1 ("bad-cavity" regime): cavity wider than spin line — all
+    spins contribute but cavity losses are high.
+
+    Args:
+        cavity_props: Pre-computed cavity quantities (includes κ/(2π)).
+        spin_linewidth_hz: Total spin linewidth Γ_eff (Hz).
+
+    Returns:
+        Dimensionless overlap ratio R.
+    """
+    if spin_linewidth_hz <= 0:
+        return float("inf")
+    return cavity_props.cavity_linewidth_hz / spin_linewidth_hz

@@ -14,9 +14,25 @@ from .disturbance import DisturbanceGenerator
 from .coils import ShimCoilArray
 from .maser_gain import compute_maser_metrics, max_tolerable_b_std
 from .thermal import ThermalModel, ThermalState, compute_thermal_state
-from .signal_chain import compute_signal_chain_budget
-from .cavity import compute_cavity_properties, compute_full_threshold
-from .optical_pump import compute_pump_state
+from .cavity import (
+    compute_cavity_properties,
+    compute_effective_q,
+    compute_full_threshold,
+    compute_magnetic_q,
+    compute_spectral_overlap,
+)
+from .signal_chain import compute_signal_chain_budget, compute_maser_noise_temperature
+from .optical_pump import compute_pump_state, compute_depth_resolved_pump
+from .pulsed_pump import compute_pulsed_inversion, compute_equivalent_cw_power
+from .maxwell_bloch import solve_maxwell_bloch, compute_steady_state_power
+from .spectral import (
+    build_detuning_grid,
+    build_initial_inversion,
+    compute_on_resonance_inversion,
+    spectral_overlap_weights,
+)
+from .dipolar import estimate_dipolar_coupling_hz, estimate_refilling_time_us
+from .spectral_maxwell_bloch import solve_spectral_maxwell_bloch
 
 
 class FieldEnvironment:
@@ -140,6 +156,13 @@ class FieldEnvironment:
                 update={"cavity_q": self._thermal_state.effective_cavity_q}
             )
 
+        # Q-boosting via electronic feedback (Wang 2024)
+        if maser_config.q_boost_gain > 0:
+            q_eff = compute_effective_q(maser_config)
+            maser_config = maser_config.model_copy(
+                update={"cavity_q": q_eff}
+            )
+
         maser = compute_maser_metrics(net_field, mask, nv_config, maser_config)
 
         result = {
@@ -154,6 +177,11 @@ class FieldEnvironment:
             result["temperature_c"] = self._thermal_state.temperature_c
             result["b0_shift_tesla"] = self._thermal_state.b0_shift_tesla
 
+        # Q-boost reporting
+        if self.config.maser.q_boost_gain > 0:
+            result["q_boost_effective_q"] = maser_config.cavity_q
+            result["q_boost_gain"] = self.config.maser.q_boost_gain
+
         # Optical pump — compute FIRST so effective efficiency feeds
         # into signal_chain and cavity calculations (closes pump→inversion loop).
         pump = compute_pump_state(self.config.optical_pump, nv_config)
@@ -162,9 +190,30 @@ class FieldEnvironment:
         result["effective_pump_efficiency"] = pump.effective_pump_efficiency
         result["thermal_load_w"] = pump.thermal_load_w
 
+        # Depth-resolved pump (when n_depth_slices > 1)
+        pump_cfg = self.config.optical_pump
+        effective_eta = pump.effective_pump_efficiency
+        if pump_cfg.n_depth_slices > 1:
+            dr_pump = compute_depth_resolved_pump(
+                pump_cfg, nv_config, pump_cfg.n_depth_slices,
+            )
+            effective_eta = dr_pump.effective_pump_efficiency
+            result["effective_pump_efficiency"] = effective_eta
+            result["pump_front_back_ratio"] = dr_pump.front_back_ratio
+
+        # Pulsed pump metrics (config-gated)
+        if pump_cfg.pulsed:
+            pulsed = compute_pulsed_inversion(pump_cfg, nv_config)
+            result["pulsed_peak_inversion"] = pulsed.peak_inversion
+            result["pulsed_mean_inversion"] = pulsed.mean_inversion
+            result["pulsed_duty_cycle"] = pulsed.duty_cycle
+            result["pulsed_equivalent_cw_power_w"] = compute_equivalent_cw_power(
+                pump_cfg
+            )
+
         # Override pump_efficiency with the dynamic value from optical pump
         nv_config = nv_config.model_copy(
-            update={"pump_efficiency": pump.effective_pump_efficiency}
+            update={"pump_efficiency": effective_eta}
         )
 
         # Signal chain SNR budget (now uses dynamic pump efficiency)
@@ -187,6 +236,73 @@ class FieldEnvironment:
         result["threshold_margin"] = threshold.threshold_margin
         result["n_effective"] = threshold.n_effective
         result["ensemble_coupling_hz"] = threshold.ensemble_coupling_hz
+
+        # Magnetic Q, spectral overlap, maser noise temperature
+        cavity_props = compute_cavity_properties(maser_config, self.config.cavity)
+        mag_q = compute_magnetic_q(nv_config, self.config.cavity)
+        result["q_magnetic"] = mag_q.q_magnetic
+
+        result["spectral_overlap_R"] = compute_spectral_overlap(
+            cavity_props, gamma_eff_hz,
+        )
+
+        result["maser_noise_temperature_k"] = compute_maser_noise_temperature(
+            mag_q.q_magnetic,
+            maser_config.cavity_q,
+            self.config.signal_chain.physical_temperature_k,
+        )
+
+        # Maxwell-Bloch time-domain metrics (config-gated)
+        mb_config = self.config.maxwell_bloch
+        if mb_config.enable:
+            mb_result = solve_maxwell_bloch(
+                nv_config, maser_config, self.config.cavity,
+                mb_config, gain_budget,
+            )
+            result["mb_output_power_w"] = mb_result.output_power_w
+            result["mb_steady_state_photons"] = mb_result.steady_state_photons
+            result["mb_cooperativity"] = mb_result.cooperativity
+            if mb_result.gain_db is not None:
+                result["mb_gain_db"] = mb_result.gain_db
+            result["mb_analytical_power_w"] = compute_steady_state_power(
+                nv_config, maser_config, self.config.cavity, gain_budget,
+            )
+
+        # Spectral dynamics metrics (config-gated)
+        if self.config.spectral.enable:
+            delta_hz, p_delta = build_initial_inversion(
+                nv_config, self.config.spectral,
+            )
+            cavity_bw_hz = (
+                maser_config.cavity_frequency_ghz * 1e9 / maser_config.cavity_q
+            )
+            sz_on_res = compute_on_resonance_inversion(
+                p_delta, delta_hz, cavity_bw_hz,
+            )
+            result["spectral_on_resonance_inversion"] = sz_on_res
+            result["spectral_inhomogeneous_linewidth_mhz"] = (
+                self.config.spectral.inhomogeneous_linewidth_mhz
+            )
+
+        # Dipolar interaction metrics (config-gated)
+        if self.config.dipolar.enable:
+            n_nv = nv_config.nv_density_m3
+            result["dipolar_coupling_hz"] = estimate_dipolar_coupling_hz(n_nv)
+            result["dipolar_refilling_time_us"] = estimate_refilling_time_us(n_nv)
+
+        # Spectral Maxwell-Bloch solver (requires both MB and spectral enabled)
+        if mb_config.enable and self.config.spectral.enable:
+            smb_result = solve_spectral_maxwell_bloch(
+                nv_config, maser_config, self.config.cavity,
+                mb_config, self.config.spectral,
+                self.config.dipolar if self.config.dipolar.enable else None,
+                gain_budget,
+            )
+            result["smb_output_power_w"] = smb_result.output_power_w
+            result["smb_steady_state_photons"] = smb_result.steady_state_photons
+            result["smb_on_res_inversion"] = smb_result.steady_state_on_res_inversion
+            result["smb_cooperativity"] = smb_result.cooperativity
+            result["smb_n_bursts"] = smb_result.n_bursts
 
         return result
 

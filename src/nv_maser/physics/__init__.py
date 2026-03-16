@@ -22,10 +22,43 @@ from .cavity import (  # noqa: F401
     compute_maser_threshold,
     compute_n_effective,
     compute_full_threshold,
+    compute_effective_q,
 )
 from .optical_pump import (  # noqa: F401
     PumpState,
+    DepthResolvedPumpResult,
     compute_pump_rate,
     compute_absorbed_power,
     compute_pump_state,
+    compute_depth_resolved_pump,
+)
+from .pulsed_pump import (  # noqa: F401
+    PulsedPumpResult,
+    pulsed_pump_rate,
+    compute_pulsed_inversion,
+    compute_equivalent_cw_power,
+)
+from .maxwell_bloch import (  # noqa: F401
+    MaxwellBlochResult,
+    solve_maxwell_bloch,
+    compute_steady_state_power,
+)
+from .spectral import (  # noqa: F401
+    build_detuning_grid,
+    build_initial_inversion,
+    burn_spectral_hole,
+    compute_on_resonance_inversion,
+    q_gaussian,
+    spectral_overlap_weights,
+)
+from .dipolar import (  # noqa: F401
+    stretched_exponential_refill,
+    spectral_diffusion_step,
+    apply_dipolar_refilling,
+    estimate_dipolar_coupling_hz,
+    estimate_refilling_time_us,
+)
+from .spectral_maxwell_bloch import (  # noqa: F401
+    SpectralMBResult,
+    solve_spectral_maxwell_bloch,
 )
