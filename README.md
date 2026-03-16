@@ -1,6 +1,6 @@
 # NV Maser "Tricorder" Digital Twin
 
-`Python 3.10+` `PyTorch` `FastAPI` `Tests: 376 passed`
+`Python 3.10+` `PyTorch` `FastAPI` `Tests: 547 passed`
 
 Real-time digital twin of an active magnetic shimming system for a **Nitrogen-Vacancy (NV) center diamond maser** — simulates, trains, serves, and reinforcement-learns a shimming policy that keeps the B₀ field uniform to < 100 ppm.
 
@@ -53,7 +53,13 @@ src/nv_maser/
 │   ├── thermal.py          Thermal model (pump heating → T₂*/Q degradation)
 │   ├── halbach.py          Halbach multipole field generator
 │   ├── cavity_qed.py       Cavity QED threshold & cooperativity
-│   ├── signal_chain.py     Signal chain SNR budget (sensor → ADC → DAC → coils)
+│   ├── cavity.py           Magnetic Q, spectral overlap, effective Q, Q-boost
+│   ├── signal_chain.py     Signal chain SNR budget + noise temperature
+│   ├── maxwell_bloch.py    5-variable Maxwell-Bloch ODE solver
+│   ├── spectral.py         Frequency-resolved inversion profiles & hole burning
+│   ├── dipolar.py          Spin-spin dipolar interaction & spectral diffusion
+│   ├── spectral_maxwell_bloch.py  Frequency-resolved Maxwell-Bloch solver
+│   ├── pulsed_pump.py      Pulsed optical pump ODE solver
 │   └── closed_loop.py      Time-stepping closed-loop shimming simulator
 ├── model/
 │   ├── controller.py       CNN / MLP / LSTM controllers + build_controller()
@@ -87,7 +93,7 @@ benchmarks/
 docs/adr/                   Architecture Decision Records (ADR-001 – ADR-004)
 config/default.yaml         Default simulation parameters (YAML, deep-merge)
 experiments/                SQLite runs.db — auto-created on first train
-tests/                      376 passed, 2 skipped (CUDA + onnxruntime)
+tests/                      547 passed, 2 skipped (CUDA + onnxruntime)
 checkpoints/                Saved model weights + optional model.onnx (git-ignored)
 ```
 
@@ -177,7 +183,7 @@ print(summary)  # mean_variance, mean_gain_budget, masing_fraction, ...
 ### Tests and benchmarks
 
 ```bash
-make test                               # 376 passed, 2 skipped
+make test                               # 547 passed, 2 skipped
 make test-cov                           # HTML coverage report in htmlcov/
 make lint                               # ruff check
 make benchmark                          # multi-arch latency table
@@ -329,6 +335,7 @@ coils:
 | [ADR-002](docs/adr/ADR-002-api-design.md) | FastAPI REST Inference Server | FastAPI + uvicorn; hardened with CORS, body guard, security headers |
 | [ADR-003](docs/adr/ADR-003-rl-environment-design.md) | RL Environment Design | Standalone `ShimmingEnv`, no gymnasium dependency |
 | [ADR-004](docs/adr/ADR-004-temporal-controller-lstm.md) | Temporal Controller — LSTM | CNN extractor → 2-layer LSTM → linear head |
+| [ADR-005](docs/adr/ADR-005-phase-a-physics-upgrades.md) | Phase A Physics Upgrades | Magnetic Q, noise temp, orientation, spectral overlap |
 
 ---
 
@@ -384,8 +391,12 @@ The digital twin includes a multi-physics simulation stack built across Phases 1
 | 6 | **Cavity QED** | Cooperativity, masing threshold, gain budget |
 | 7 | **Physics-Informed ML** | Loss terms for gain budget + cooperativity; RL reward shaping |
 | 8 | **PPO RL + Disturbances** | PPO with GAE; mains hum, transient spikes, DC drift |
+| A | **Analytical Quick Wins** | Magnetic Q_m, noise temperature, orientation correction, spectral overlap (ADR-005) |
+| B | **Maxwell-Bloch Solver** | 5-variable mean-field ODE, steady-state power, driven amplifier mode |
+| C | **Spectral & Dipolar Physics** | q-Gaussian lineshape, hole burning, dipolar T₁ refill, spectral diffusion |
+| D | **Practical Enhancements** | Depth-resolved optical pump, pulsed pump dynamics, Q-boost cavity gain |
 
-All physics models feed into `FieldEnvironment.compute_uniformity_metric()` which returns a unified metrics dict (SNR, cooperativity, gain budget, thermal load, pump saturation).
+All physics models feed into `FieldEnvironment.compute_uniformity_metric()` which returns a unified metrics dict (SNR, cooperativity, gain budget, thermal load, pump saturation, Maxwell-Bloch dynamics, spectral profiles, dipolar coupling).
 
 ---
 
