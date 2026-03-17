@@ -1037,6 +1037,179 @@ class DipolarConfig(BaseModel):
     )
 
 
+class SingleSidedMagnetConfig(BaseModel):
+    """Single-sided permanent magnet array for handheld MRI probe.
+
+    Models barrel, U-shaped, or single-sided Halbach magnets that produce
+    a B₀ sweet spot at a target depth into tissue.  The sweet spot is a
+    saddle point where dB/dz = 0, giving quasi-homogeneous field over a
+    small volume.
+
+    Reference: Marble et al., "A compact permanent magnet array with a
+    remote homogeneous field", J. Magn. Reson. 186, 100 (2007).
+    """
+
+    magnet_type: str = Field(
+        "barrel",
+        description=(
+            "Magnet geometry: 'barrel' (concentric rings, best sweet spot), "
+            "'u_shaped' (NMR-MOUSE style, two anti-parallel blocks), "
+            "'halbach_single_sided' (one-sided Halbach array)."
+        ),
+    )
+    remanence_tesla: float = Field(
+        1.45,
+        gt=0,
+        description="NdFeB remanence Br (Tesla). N52: ~1.45 T.",
+    )
+
+    # ── Ring geometry (barrel type) ───────────────────────────────
+    num_rings: int = Field(
+        4,
+        ge=1,
+        le=20,
+        description="Number of concentric annular rings in the barrel.",
+    )
+    ring_inner_radii_mm: list[float] = Field(
+        [5.0, 12.0, 20.0, 28.0],
+        description="Inner radius of each ring (mm), from centre outward.",
+    )
+    ring_outer_radii_mm: list[float] = Field(
+        [10.0, 18.0, 26.0, 35.0],
+        description="Outer radius of each ring (mm).",
+    )
+    ring_heights_mm: list[float] = Field(
+        [30.0, 25.0, 20.0, 15.0],
+        description="Height (thickness) of each ring (mm).",
+    )
+    ring_polarities: list[float] = Field(
+        [1.0, -1.0, 1.0, -1.0],
+        description=(
+            "Magnetisation direction of each ring: +1 = up, -1 = down. "
+            "Alternating polarities create the sweet-spot saddle point."
+        ),
+    )
+
+    # ── Sweet spot targets ────────────────────────────────────────
+    target_depth_mm: float = Field(
+        20.0,
+        gt=0,
+        description="Target depth of the sweet spot below the magnet surface (mm).",
+    )
+    target_b0_tesla: float = Field(
+        0.05,
+        gt=0,
+        description="Target B₀ field strength at the sweet spot (Tesla).",
+    )
+
+    # ── Field computation ─────────────────────────────────────────
+    computation_extent_mm: float = Field(
+        60.0,
+        gt=0,
+        description="Half-extent of the computation volume above the magnet (mm).",
+    )
+    computation_resolution: int = Field(
+        128,
+        ge=16,
+        description="Grid points per axis in the computation volume.",
+    )
+
+
+class SurfaceCoilConfig(BaseModel):
+    """Flat spiral surface coil for single-sided NMR transmit/receive.
+
+    Models a planar multi-turn coil placed on the tissue surface.
+    Determines B₁ sensitivity, impedance, and thermal noise as functions
+    of operating frequency and depth into tissue.
+
+    Reference: Demas et al., "Electronic characterization of lithographically
+    patterned microcoils for NMR", J. Magn. Reson. 200, 56 (2009).
+    """
+
+    coil_radius_mm: float = Field(
+        15.0,
+        gt=0,
+        description="Mean radius of the spiral coil (mm).",
+    )
+    n_turns: int = Field(
+        5,
+        ge=1,
+        le=50,
+        description="Number of turns in the flat spiral.",
+    )
+    wire_diameter_mm: float = Field(
+        0.5,
+        gt=0,
+        description="Copper wire diameter (mm). Determines resistance.",
+    )
+    temperature_k: float = Field(
+        300.0,
+        gt=0,
+        description=(
+            "Coil physical temperature (K). 300 = room temp. "
+            "200 = Peltier-cooled. Determines thermal noise."
+        ),
+    )
+    q_factor: float = Field(
+        80.0,
+        gt=0,
+        description=(
+            "Loaded quality factor of the tuned coil. "
+            "Surface coils at 2 MHz: 50–150 typical."
+        ),
+    )
+
+    # ── Tissue coupling ───────────────────────────────────────────
+    tissue_conductivity_s_per_m: float = Field(
+        0.5,
+        ge=0,
+        description=(
+            "Effective tissue conductivity (S/m) for body noise calculation. "
+            "Muscle ~0.5 S/m, fat ~0.05 S/m at low MHz."
+        ),
+    )
+
+
+class DepthProfileConfig(BaseModel):
+    """Configuration for 1D NMR depth profiling simulation."""
+
+    max_depth_mm: float = Field(
+        30.0,
+        gt=0,
+        description="Maximum simulation depth below coil plane (mm).",
+    )
+    depth_resolution_mm: float = Field(
+        0.5,
+        gt=0,
+        description="Depth step size for profile sampling (mm).",
+    )
+    voxel_size_mm: float = Field(
+        3.0,
+        gt=0,
+        description="Isotropic voxel side length (mm) for SNR calculation.",
+    )
+    n_averages: int = Field(
+        1024,
+        ge=1,
+        description="Number of signal averages (NEX). SNR scales as sqrt(N).",
+    )
+    repetition_time_ms: float = Field(
+        100.0,
+        gt=0,
+        description="Repetition time TR (ms) between excitations.",
+    )
+    readout_bandwidth_hz: float = Field(
+        10_000.0,
+        gt=0,
+        description="Readout bandwidth (Hz). Sets noise floor.",
+    )
+    proton_larmor_mhz_per_t: float = Field(
+        42.577,
+        gt=0,
+        description="Proton gyromagnetic ratio γ/2π (MHz/T).",
+    )
+
+
 class SimConfig(BaseModel):
     """Top-level simulation configuration."""
 
@@ -1059,6 +1232,11 @@ class SimConfig(BaseModel):
     training: TrainingConfig = TrainingConfig()
     viz: VizConfig = VizConfig()
     device: str = Field("auto", description="'auto' | 'cuda' | 'cpu'")
+
+    # ── Handheld MRI probe ────────────────────────────────────────
+    single_sided_magnet: SingleSidedMagnetConfig = SingleSidedMagnetConfig()
+    surface_coil: SurfaceCoilConfig = SurfaceCoilConfig()
+    depth_profile: DepthProfileConfig = DepthProfileConfig()
 
     def resolve_device(self) -> str:
         if self.device == "auto":

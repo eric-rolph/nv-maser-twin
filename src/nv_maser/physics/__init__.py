@@ -62,3 +62,26 @@ from .spectral_maxwell_bloch import (  # noqa: F401
     SpectralMBResult,
     solve_spectral_maxwell_bloch,
 )
+from .single_sided_magnet import (  # noqa: F401
+    SingleSidedMagnet,
+    SweetSpotInfo,
+    FieldMap2D,
+)
+from .surface_coil import (  # noqa: F401
+    SurfaceCoil,
+    CoilProperties,
+    NoiseComponents,
+    sensitivity_on_axis,
+    sensitivity_off_axis,
+    compute_coil_properties,
+    compute_noise,
+    snr_per_voxel,
+)
+from .depth_profile import (  # noqa: F401
+    TissueLayer,
+    DepthProfile,
+    FOREARM_LAYERS,
+    HEMORRHAGE_LAYERS,
+    simulate_depth_profile,
+    add_noise,
+)
