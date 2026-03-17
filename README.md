@@ -1,10 +1,13 @@
 # NV Maser "Tricorder" Digital Twin
 
-`Python 3.10+` `PyTorch` `FastAPI` `Tests: 547 passed`
+`Python 3.10+` `PyTorch` `FastAPI` `Tests: 576 passed`
 
 Real-time digital twin of an active magnetic shimming system for a **Nitrogen-Vacancy (NV) center diamond maser** — simulates, trains, serves, and reinforcement-learns a shimming policy that keeps the B₀ field uniform to < 100 ppm.
 
 The twin includes a full physics stack (NV spin dynamics, optical pump, thermal coupling, Halbach array, cavity QED, signal chain SNR) and a PPO-based RL pipeline with closed-loop validation.
+
+> **Hardware companion**: The physical maser build lives in a separate repository → [`nv-maser-hardware`](https://github.com/ericrobinson-dev/nv-maser-hardware).  
+> This repo defines the **simulation & specs**; the hardware repo implements them in KiCad, CAD, and firmware.
 
 ---
 
@@ -93,7 +96,7 @@ benchmarks/
 docs/adr/                   Architecture Decision Records (ADR-001 – ADR-004)
 config/default.yaml         Default simulation parameters (YAML, deep-merge)
 experiments/                SQLite runs.db — auto-created on first train
-tests/                      547 passed, 2 skipped (CUDA + onnxruntime)
+tests/                      576 passed, 2 skipped (CUDA + onnxruntime)
 checkpoints/                Saved model weights + optional model.onnx (git-ignored)
 ```
 
@@ -183,7 +186,7 @@ print(summary)  # mean_variance, mean_gain_budget, masing_fraction, ...
 ### Tests and benchmarks
 
 ```bash
-make test                               # 547 passed, 2 skipped
+make test                               # 576 passed, 2 skipped
 make test-cov                           # HTML coverage report in htmlcov/
 make lint                               # ruff check
 make benchmark                          # multi-arch latency table
@@ -397,6 +400,25 @@ The digital twin includes a multi-physics simulation stack built across Phases 1
 | D | **Practical Enhancements** | Depth-resolved optical pump, pulsed pump dynamics, Q-boost cavity gain |
 
 All physics models feed into `FieldEnvironment.compute_uniformity_metric()` which returns a unified metrics dict (SNR, cooperativity, gain budget, thermal load, pump saturation, Maxwell-Bloch dynamics, spectral profiles, dipolar coupling).
+
+---
+
+## Physics Regression Testing
+
+The simulation is validated against published experimental values from the four source papers — not just internal self-consistency. `tests/test_physics_regression.py` contains 27 tests across 6 classes:
+
+| Test Class | Paper | Validated Quantity |
+|---|---|---|
+| `TestWang2024QBoost` | Wang et al. 2024 | Q₀ = 11,000 → Q_eff = 650,000 via electronic feedback |
+| `TestWang2024NoiseTemperature` | Wang et al. 2024, Eq. 4 | Amplifier noise at analytic limit points |
+| `TestBeerLambertAbsorption` | General | P_abs = P·(1−e^{−αd}) at constructed optical depths |
+| `TestKersten2026DipolarRefilling` | Kersten et al. 2026 | α = 0.5 stretched-exponential (dipolar) vs α = 1 (exponential) |
+| `TestNVTransitionFrequency` | Long et al. 2025 | ν− = D − γₑB₀ matches default cavity at 50 mT |
+| `TestCooperativityScaling` | All | C ∝ Q, C ∝ T₂\*, gain-budget scaling |
+
+Additionally, `TestCrossSolverConsistency` in `test_spectral_maxwell_bloch.py` verifies that the frequency-resolved spectral solver reduces to the scalar Maxwell-Bloch solver in the monochromatic limit (cooperativity exact match, photon number within 30%).
+
+> **Note on `PhysicsInformedLoss`**: The gain-budget and cooperativity penalty terms are computed via NumPy and added as non-differentiable scalar offsets. No gradients flow through the physics — they act as adaptive loss weighting per batch. See the class docstring in `src/nv_maser/model/loss.py` for details.
 
 ---
 

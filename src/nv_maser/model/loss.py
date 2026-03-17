@@ -71,14 +71,35 @@ class FieldUniformityLoss(nn.Module):
 
 
 class PhysicsInformedLoss(nn.Module):
-    """Physics-informed loss: Var(B) + λ||I||² − α·log(G) + β·max(0, 1−C).
+    """Physics-weighted loss: Var(B) + λ||I||² − α·log(G) + β·max(0, 1−C).
 
     Wraps :class:`FieldUniformityLoss` and adds scalar penalties computed
     from the physics environment.  Uses ``-log(gain_budget)`` instead of
     ``1/gain_budget`` to keep the penalty bounded and on the same scale
-    as the field-variance term.  The physics terms are non-differentiable
-    scalars (numpy), so they act as an adaptive weighting on each batch
-    rather than gradient sources.
+    as the field-variance term.
+
+    .. warning::
+        **Not a PINN (Physics-Informed Neural Network) in the standard sense.**
+
+        The gain-budget and cooperativity penalties are computed via the physics
+        environment using NumPy and attached as *non-differentiable float offsets*
+        to the PyTorch loss scalar.  No gradients flow through the physics terms.
+
+        The class name is historical.  Concretely:
+
+        * ``field_variance`` term — **differentiable** (PyTorch autograd)
+        * ``current_l2`` term   — **differentiable** (PyTorch autograd)
+        * ``-log(gain_budget)`` — **non-differentiable** (numpy scalar offset)
+        * ``cooperativity`` penalty — **non-differentiable** (numpy scalar offset)
+
+        The physics terms function as *adaptive loss weighting* per batch, not
+        as gradient regularisers.  This means the network cannot learn from the
+        physics signal via backpropagation; the physics only shifts the *reported*
+        loss value.
+
+        If true physics-gradient regularisation is required, the gain_budget and
+        cooperativity computations must be re-implemented as differentiable
+        PyTorch operations (e.g., via analytical formulas in ``torch``).
     """
 
     def __init__(
