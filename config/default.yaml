@@ -123,4 +123,9 @@ viz:
   show_coil_positions: true
   field_range_tesla: [0.045, 0.055]
 
+calibration:
+  calibration_dir: ""          # path to nv-maser-hardware/calibration/ (empty = not yet available)
+  active_radius_mm: 3.0        # active zone radius for uniformity ppm metric
+  reference_map_path: ""       # .npz FieldMap to use as training reference (empty = simulation-generated)
+
 device: auto
