@@ -6,7 +6,7 @@ Real-time digital twin of an active magnetic shimming system for a **Nitrogen-Va
 
 The twin includes a full physics stack (NV spin dynamics, optical pump, thermal coupling, Halbach array, cavity QED, signal chain SNR) and a PPO-based RL pipeline with closed-loop validation.
 
-> **Hardware companion**: The physical maser build lives in a separate repository → [`nv-maser-hardware`](https://github.com/ericrobinson-dev/nv-maser-hardware).  
+> **Hardware companion**: The physical maser build lives in a separate repository → [`nv-maser-hardware`](https://github.com/eric-rolph/nv-maser-hardware).  
 > This repo defines the **simulation & specs**; the hardware repo implements them in KiCad, CAD, and firmware.
 
 ---
