@@ -189,3 +189,10 @@ from .superradiance import (  # noqa: F401
     compute_superradiant_peak,
     compute_superradiance,
 )
+from .sensitivity import (  # noqa: F401
+    SensitivityResult,
+    compute_schawlow_townes_sensitivity,
+    compute_thermal_sensitivity,
+    compute_friis_sensitivity,
+    compute_sensitivity,
+)
