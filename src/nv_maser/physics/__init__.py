@@ -148,3 +148,19 @@ from .epg_adapter import (  # noqa: F401
     epg_depth_profile,
     cross_validate_epg_vs_analytical,
 )
+from .t1t2_estimator import (  # noqa: F401
+    T2FitResult,
+    T1FitResult,
+    T2MapResult,
+    T1MapResult,
+    T1T2Map,
+    AbnormalityFlag,
+    T1T2CrossValidation,
+    fit_t2_monoexponential,
+    fit_t1_saturation_recovery,
+    map_t2_from_cpmg,
+    map_t1_from_saturation_recovery,
+    build_t1t2_map,
+    detect_tissue_abnormalities,
+    cross_validate_t1t2,
+)
