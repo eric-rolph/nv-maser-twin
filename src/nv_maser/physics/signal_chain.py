@@ -40,6 +40,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from ..config import NVConfig, MaserConfig, SignalChainConfig
+from .quantum_noise import MaserNoiseResult
 
 # ── Physical constants ────────────────────────────────────────────
 _HBAR = 1.054571817e-34  # J·s
@@ -73,6 +74,18 @@ class SignalChainBudget:
     # Context
     detection_bandwidth_hz: float
     cavity_frequency_ghz: float
+
+    # Quantum noise (maser as first-stage pre-amplifier)
+    maser_noise_temperature_k: float
+    """T_noise = ℏω n_sp / k_B from quantum Langevin theory.  math.nan if not supplied."""
+
+    friis_system_temperature_k: float
+    """Friis cascade: T_maser + T_LNA / G_maser.  Quantum-limited system temperature (K).
+    math.nan if not supplied."""
+
+    quantum_advantage_db: float
+    """10 log₁₀(T_sys_classical / T_friis).  SNR improvement from maser pre-amp (dB).
+    math.nan if not supplied."""
 
 
 def compute_maser_emission_power(
@@ -227,11 +240,46 @@ def compute_maser_noise_temperature(
     )
 
 
+def compute_friis_system_temperature(
+    maser_noise_result: MaserNoiseResult,
+    lna_noise_figure_db: float,
+    maser_gain_linear: float,
+) -> float:
+    """Friis cascade noise temperature with maser as first-stage pre-amplifier (K).
+
+    For a cascade of a maser amplifier followed by an LNA:
+
+        T_cascade = T_maser + T_LNA / G_maser
+
+    where
+        T_maser  = maser quantum noise temperature = ℏω n_sp / k_B
+        T_LNA    = T₀ · (F_LNA − 1)      (F_LNA = 10^(NF/10), T₀ = 290 K)
+        G_maser  = maser power gain (linear)
+
+    When G_maser ≫ 1, T_cascade → T_maser — the system temperature is
+    dominated by the maser's quantum noise floor (~0.11 K), providing a
+    ~35 dB advantage over a room-temperature LNA chain.
+
+    Args:
+        maser_noise_result: Quantum noise characterisation from compute_maser_noise().
+        lna_noise_figure_db: LNA noise figure (dB). Typically 1–2 dB.
+        maser_gain_linear: Maser power gain (linear, ≥ 1).
+
+    Returns:
+        Friis cascade system noise temperature (K).
+    """
+    f_lna = 10.0 ** (lna_noise_figure_db / 10.0)
+    t_lna = _T0 * (f_lna - 1.0)
+    g = max(maser_gain_linear, 1.0)  # physical lower bound: G ≥ 1
+    return maser_noise_result.noise_temperature_k + t_lna / g
+
+
 def compute_signal_chain_budget(
     nv_config: NVConfig,
     maser_config: MaserConfig,
     signal_config: SignalChainConfig,
     gain_budget: float,
+    maser_noise_result: MaserNoiseResult | None = None,
 ) -> SignalChainBudget:
     """
     Compute the complete SNR budget for the receiver chain.
@@ -239,14 +287,28 @@ def compute_signal_chain_budget(
     Signal path: NV emission → cavity coupling (β) → insertion loss → LNA
     Noise path:  thermal + amplifier + ADC quantisation
 
+    Optionally, pass a ``maser_noise_result`` to include the quantum-limited
+    Friis cascade temperature in the budget.  When supplied, the budget gains
+    three additional fields:
+
+    * ``maser_noise_temperature_k``     — T_noise = ℏω n_sp / k_B  (K)
+    * ``friis_system_temperature_k``    — Friis cascade T_maser + T_LNA / G_maser  (K)
+    * ``quantum_advantage_db``          — 10 log₁₀(T_sys / T_friis)  (dB)
+
+    These fields are ``math.nan`` when *maser_noise_result* is not provided,
+    preserving full backward compatibility for existing callers.
+
     Args:
         nv_config: NV center parameters.
         maser_config: Cavity and coupling parameters.
         signal_config: Receiver chain parameters.
         gain_budget: Current maser gain budget (0–1) from field uniformity.
+        maser_noise_result: Optional quantum noise characterisation from
+            ``compute_maser_noise()``.  Default ``None``.
 
     Returns:
-        SignalChainBudget with all power components and SNR.
+        SignalChainBudget with all power components, SNR, and (optionally)
+        quantum noise metrics.
     """
     # ── Signal power ──────────────────────────────────────────────
     p_emission = compute_maser_emission_power(nv_config, maser_config, gain_budget)
@@ -270,6 +332,31 @@ def compute_signal_chain_budget(
     snr_lin = p_received / p_noise if p_noise > 0 else float("inf")
     snr_db = 10.0 * math.log10(snr_lin) if snr_lin > 0 else -math.inf
 
+    # ── Quantum noise Friis cascade (optional) ────────────────────
+    if maser_noise_result is not None and maser_noise_result.output_power_w > 0.0:
+        # Derive maser gain from output power versus its own quantum noise floor:
+        #   G_maser = P_out / (k_B · T_maser · bw)
+        # This is a self-consistent estimate; for high-gain masers G >> 1.
+        _t_maser = maser_noise_result.noise_temperature_k
+        _p_noise_floor = _KB * _t_maser * bw if bw > 0 else 0.0
+        g_maser = (
+            maser_noise_result.output_power_w / _p_noise_floor
+            if _p_noise_floor > 0.0
+            else 1.0
+        )
+        t_friis = compute_friis_system_temperature(
+            maser_noise_result, signal_config.lna_noise_figure_db, g_maser
+        )
+        q_adv_db = (
+            10.0 * math.log10(t_sys / t_friis)
+            if (t_friis > 0.0 and t_sys > 0.0)
+            else math.nan
+        )
+    else:
+        _t_maser = math.nan
+        t_friis = math.nan
+        q_adv_db = math.nan
+
     return SignalChainBudget(
         maser_emission_power_w=p_emission,
         coupled_power_w=p_coupled,
@@ -283,6 +370,9 @@ def compute_signal_chain_budget(
         snr_db=snr_db,
         detection_bandwidth_hz=bw,
         cavity_frequency_ghz=maser_config.cavity_frequency_ghz,
+        maser_noise_temperature_k=_t_maser,
+        friis_system_temperature_k=t_friis,
+        quantum_advantage_db=q_adv_db,
     )
 
 

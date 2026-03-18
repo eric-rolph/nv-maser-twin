@@ -13,6 +13,7 @@ from .halbach import (  # noqa: F401
 from .signal_chain import (  # noqa: F401
     SignalChainBudget,
     compute_signal_chain_budget,
+    compute_friis_system_temperature,
     compute_snr_vs_field_uniformity,
 )
 from .cavity import (  # noqa: F401
