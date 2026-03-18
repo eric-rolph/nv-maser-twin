@@ -62,6 +62,7 @@ class TissueLayer:
     proton_density: float = 1.0  # relative to water
     t1_ms: float = 600.0
     t2_ms: float = 50.0
+    susceptibility_ppm: float = -9.05  # volume magnetic susceptibility (ppm), water reference
 
     def __post_init__(self) -> None:
         if self.thickness_mm <= 0:
@@ -86,18 +87,27 @@ class DepthProfile:
 
 # ── Default tissue models ─────────────────────────────────────────
 
+# Susceptibility values (ppm) from De Graaf (2007) "In Vivo NMR Spectroscopy",
+# Table 2.1, and Schenck (1996) Magn Reson Med 36(2):199-210.
+_CHI_WATER = -9.05       # reference (CGS: -0.719e-6 SI)
+_CHI_FAT = -7.79         # subcutaneous fat
+_CHI_MUSCLE = -9.05      # skeletal muscle ≈ water
+_CHI_SKIN = -9.40        # dermis (slightly more diamagnetic)
+_CHI_BONE_CORTEX = -8.86 # cortical bone (reduced water content)
+_CHI_BLOOD = -9.05       # oxygenated blood ≈ water
+
 FOREARM_LAYERS: list[TissueLayer] = [
-    TissueLayer("skin", thickness_mm=2.0, proton_density=0.7, t1_ms=400, t2_ms=30),
-    TissueLayer("subcutaneous_fat", thickness_mm=5.0, proton_density=0.9, t1_ms=250, t2_ms=80),
-    TissueLayer("muscle", thickness_mm=20.0, proton_density=1.0, t1_ms=600, t2_ms=35),
-    TissueLayer("bone_cortex", thickness_mm=3.0, proton_density=0.05, t1_ms=1000, t2_ms=0.5),
+    TissueLayer("skin", thickness_mm=2.0, proton_density=0.7, t1_ms=400, t2_ms=30, susceptibility_ppm=_CHI_SKIN),
+    TissueLayer("subcutaneous_fat", thickness_mm=5.0, proton_density=0.9, t1_ms=250, t2_ms=80, susceptibility_ppm=_CHI_FAT),
+    TissueLayer("muscle", thickness_mm=20.0, proton_density=1.0, t1_ms=600, t2_ms=35, susceptibility_ppm=_CHI_MUSCLE),
+    TissueLayer("bone_cortex", thickness_mm=3.0, proton_density=0.05, t1_ms=1000, t2_ms=0.5, susceptibility_ppm=_CHI_BONE_CORTEX),
 ]
 
 HEMORRHAGE_LAYERS: list[TissueLayer] = [
-    TissueLayer("skin", thickness_mm=2.0, proton_density=0.7, t1_ms=400, t2_ms=30),
-    TissueLayer("subcutaneous_fat", thickness_mm=3.0, proton_density=0.9, t1_ms=250, t2_ms=80),
-    TissueLayer("hemorrhage", thickness_mm=8.0, proton_density=1.0, t1_ms=900, t2_ms=150),
-    TissueLayer("muscle", thickness_mm=15.0, proton_density=1.0, t1_ms=600, t2_ms=35),
+    TissueLayer("skin", thickness_mm=2.0, proton_density=0.7, t1_ms=400, t2_ms=30, susceptibility_ppm=_CHI_SKIN),
+    TissueLayer("subcutaneous_fat", thickness_mm=3.0, proton_density=0.9, t1_ms=250, t2_ms=80, susceptibility_ppm=_CHI_FAT),
+    TissueLayer("hemorrhage", thickness_mm=8.0, proton_density=1.0, t1_ms=900, t2_ms=150, susceptibility_ppm=_CHI_BLOOD),
+    TissueLayer("muscle", thickness_mm=15.0, proton_density=1.0, t1_ms=600, t2_ms=35, susceptibility_ppm=_CHI_MUSCLE),
 ]
 
 
@@ -120,6 +130,7 @@ def simulate_depth_profile(
     tissue_layers: list[TissueLayer] | None = None,
     sequence: str = "spin_echo",
     te_ms: float = 10.0,
+    include_susceptibility: bool = False,
 ) -> DepthProfile:
     """Simulate a 1D NMR depth profile.
 
@@ -130,6 +141,8 @@ def simulate_depth_profile(
         tissue_layers: tissue model (stacked layers). Defaults to forearm.
         sequence: pulse sequence type ("spin_echo" or "cpmg").
         te_ms: echo time (ms).
+        include_susceptibility: if True, apply susceptibility-induced dephasing
+            signal loss using the per-layer chi values in tissue_layers.
 
     Returns:
         DepthProfile with signal, noise, and SNR vs. depth.
@@ -197,6 +210,28 @@ def simulate_depth_profile(
         emf = omega0 * m0 * v_slice * sens[i] * sat * decay
         signal[i] = abs(emf)
 
+    # Optional susceptibility dephasing correction
+    if include_susceptibility:
+        # Deferred import to break circular dependency (susceptibility_adapter
+        # imports TissueLayer and _assign_layers from this module at top-level)
+        from .susceptibility_adapter import (  # noqa: PLC0415
+            apply_susceptibility_correction,
+            compute_susceptibility_field_shift,
+        )
+        sus_profile = compute_susceptibility_field_shift(
+            tissue_layers=tissue_layers,
+            b0_profile=b0,
+            depths_mm=depths,
+        )
+        corrected = apply_susceptibility_correction(
+            signal=signal,
+            susceptibility_profile=sus_profile,
+            te_s=te_s,
+            voxel_size_mm=config.voxel_size_mm,
+            depth_step_mm=config.depth_resolution_mm,
+        )
+        signal = corrected.corrected_signal
+
     # Noise (from coil at a representative frequency)
     mean_freq = float(np.mean(larmor_hz[larmor_hz > 0])) if np.any(larmor_hz > 0) else 2.13e6
     noise_comp = coil.noise(mean_freq, config.readout_bandwidth_hz)
@@ -249,6 +284,7 @@ def _assign_layers(
                     "proton_density": layer.proton_density,
                     "t1_ms": layer.t1_ms,
                     "t2_ms": layer.t2_ms,
+                    "susceptibility_ppm": layer.susceptibility_ppm,
                 })
                 assigned = True
                 break
@@ -260,6 +296,7 @@ def _assign_layers(
                 "proton_density": last.proton_density,
                 "t1_ms": last.t1_ms,
                 "t2_ms": last.t2_ms,
+                "susceptibility_ppm": last.susceptibility_ppm,
             })
     return result
 

@@ -1170,6 +1170,33 @@ class SurfaceCoilConfig(BaseModel):
     )
 
 
+class SusceptibilityConfig(BaseModel):
+    """Configuration for magnetic susceptibility field-shift modeling."""
+
+    enabled: bool = Field(
+        True,
+        description="Whether to apply susceptibility-induced ΔB₀ corrections.",
+    )
+    geometry: str = Field(
+        "slab",
+        description=(
+            "Tissue geometry model for demagnetisation factor: "
+            "'slab' (N=0, infinite plane perpendicular to B₀), "
+            "'sphere' (N=1/3). Use 'slab' for layered soft tissue."
+        ),
+    )
+    reference_chi_ppm: float = Field(
+        -9.05,
+        description="Reference susceptibility against which ΔB₀ shifts are computed (ppm). "
+        "Default is water. Shifts at each depth are relative to this baseline.",
+    )
+    include_intravoxel_dephasing: bool = Field(
+        True,
+        description="Whether to include signal loss from intravoxel B₀ dephasing "
+        "at tissue boundaries (sinc-function model).",
+    )
+
+
 class DepthProfileConfig(BaseModel):
     """Configuration for 1D NMR depth profiling simulation."""
 
@@ -1228,6 +1255,7 @@ class SimConfig(BaseModel):
     dipolar: DipolarConfig = DipolarConfig()
     feedback: FeedbackConfig = FeedbackConfig()
     thermal: ThermalConfig = ThermalConfig()
+    susceptibility: SusceptibilityConfig = SusceptibilityConfig()
     model: ModelConfig = ModelConfig()
     training: TrainingConfig = TrainingConfig()
     viz: VizConfig = VizConfig()

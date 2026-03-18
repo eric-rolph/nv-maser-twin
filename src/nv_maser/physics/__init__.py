@@ -128,3 +128,23 @@ from .mrzero_adapter import (  # noqa: F401
     cross_validate_depth,
     cross_validate_contrast,
 )
+from .susceptibility_adapter import (  # noqa: F401
+    SUSCEPTIBILITY_TABLE,
+    SusceptibilityProfile,
+    SusceptibilityCorrectedProfile,
+    compute_susceptibility_field_shift,
+    compute_frequency_shift,
+    compute_dephasing_signal_loss,
+    apply_susceptibility_correction,
+    estimate_susceptibility_impact,
+    cross_validate_susceptibility,
+)
+from .epg_adapter import (  # noqa: F401
+    EPGResult,
+    EPGDepthProfile,
+    EPGValidation,
+    epg_signal,
+    epg_cpmg,
+    epg_depth_profile,
+    cross_validate_epg_vs_analytical,
+)
