@@ -221,3 +221,14 @@ from .spin_squeezing import (  # noqa: F401
     compute_spin_squeezing,
     compute_quantum_enhancement,
 )
+from .amplifier import (  # noqa: F401
+    SIGMA_2,
+    AmplifierProperties,
+    OutputPowerResult,
+    compute_magnetic_q,
+    compute_spin_temperature,
+    compute_noise_temperature as compute_amplifier_noise_temperature,
+    compute_sql_noise_temperature,
+    compute_output_power,
+    compute_amplifier_properties,
+)
