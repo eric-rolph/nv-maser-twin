@@ -67,6 +67,14 @@ from .single_sided_magnet import (  # noqa: F401
     SweetSpotInfo,
     FieldMap2D,
 )
+from .magpylib_adapter import (  # noqa: F401
+    MAGPYLIB_AVAILABLE,
+    build_magpylib_collection,
+    field_on_axis_magpylib,
+    field_map_2d_magpylib,
+    compare_on_axis,
+    find_sweet_spot_magpylib,
+)
 from .surface_coil import (  # noqa: F401
     SurfaceCoil,
     CoilProperties,

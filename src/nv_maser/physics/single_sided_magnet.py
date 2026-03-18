@@ -98,8 +98,13 @@ def _solid_cylinder_on_axis_bz(
     Returns:
         B_z at each z position (Tesla).
     """
-    # z relative to cylinder centre (note: z increases upward from surface,
-    # cylinder is below surface so z_centre is negative)
+    # z relative to cylinder faces:
+    # Cylinder centre is at z_actual = -z_centre (below surface).
+    # Top face (closer to tissue) at z_actual + h/2 = -z_centre + h/2
+    # Bottom face at z_actual - h/2 = -z_centre - h/2
+    #
+    # Standard on-axis formula: B_z = (µ₀M/2)[g(z-z_bot) - g(z-z_top)]
+    # where g(ζ) = ζ/√(R²+ζ²)
     dz_top = z - (-z_centre + height_m / 2)
     dz_bot = z - (-z_centre - height_m / 2)
     r = radius_m
@@ -107,7 +112,7 @@ def _solid_cylinder_on_axis_bz(
     term_top = dz_top / np.sqrt(r**2 + dz_top**2)
     term_bot = dz_bot / np.sqrt(r**2 + dz_bot**2)
 
-    return (_MU0 * magnetisation / 2) * (term_top - term_bot)
+    return (_MU0 * magnetisation / 2) * (term_bot - term_top)
 
 
 def _annular_ring_on_axis_bz(
