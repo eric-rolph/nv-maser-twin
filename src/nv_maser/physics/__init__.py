@@ -176,3 +176,15 @@ from .quantum_noise import (  # noqa: F401
     compute_rin_spectrum,
     compute_maser_noise,
 )
+from .superradiance import (  # noqa: F401
+    SuperradianceResult,
+    BELOW_THRESHOLD,
+    MASING,
+    SUPERRADIANT,
+    compute_collective_coupling,
+    determine_regime,
+    compute_superradiant_pulse_duration,
+    compute_superradiant_delay,
+    compute_superradiant_peak,
+    compute_superradiance,
+)
