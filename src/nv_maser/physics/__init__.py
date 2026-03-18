@@ -196,3 +196,9 @@ from .sensitivity import (  # noqa: F401
     compute_friis_sensitivity,
     compute_sensitivity,
 )
+from .stability import (  # noqa: F401
+    OscillatorStabilityResult,
+    compute_white_fm_allan_deviation,
+    compute_allan_deviation_from_psd,
+    compute_oscillator_stability,
+)
