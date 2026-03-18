@@ -202,3 +202,22 @@ from .stability import (  # noqa: F401
     compute_allan_deviation_from_psd,
     compute_oscillator_stability,
 )
+from .spin_squeezing import (  # noqa: F401
+    REGIME_COHERENT,
+    REGIME_SQUEEZED,
+    REGIME_NEAR_HEISENBERG,
+    ProjectionNoiseResult,
+    SpinSqueezingResult,
+    QuantumEnhancementResult,
+    compute_sql_phase_sensitivity,
+    compute_hl_phase_sensitivity,
+    compute_sql_field_sensitivity,
+    compute_hl_field_sensitivity,
+    compute_projection_noise,
+    compute_wineland_squeezing,
+    compute_oat_optimal_squeezing,
+    compute_metrological_gain_db,
+    classify_squeezing_regime,
+    compute_spin_squeezing,
+    compute_quantum_enhancement,
+)
