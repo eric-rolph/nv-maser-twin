@@ -164,3 +164,15 @@ from .t1t2_estimator import (  # noqa: F401
     detect_tissue_abnormalities,
     cross_validate_t1t2,
 )
+from .quantum_noise import (  # noqa: F401
+    MaserNoiseResult,
+    PhaseNoiseSpectrum,
+    RINSpectrum,
+    compute_population_inversion_factor,
+    compute_schawlow_townes_linewidth,
+    compute_added_noise,
+    compute_noise_temperature,
+    compute_phase_noise_spectrum,
+    compute_rin_spectrum,
+    compute_maser_noise,
+)
