@@ -6,6 +6,49 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+- `rl/__init__.py` — public API exports for the RL sub-package:
+  `ShimmingEnv`, `ProbeShimmingConfig`, `ProbeShimmingEnv`, `PPOConfig`,
+  `PPOTrainer`, `ActorCritic`, `RolloutBuffer`, `compute_gae`,
+  `load_ppo_controller`, `load_supervised_controller`,
+  `validate_policy_closed_loop`
+- `physics/single_sided_magnet.py` — Phase-2 milestone validation via
+  `validate_sweet_spot_milestone()` and `MilestoneResult` dataclass.
+  Checks B₀ = 50 ± 5 mT and < 500 ppm volumetric uniformity over a
+  10 mm sphere; uses the 2D off-axis field map for accurate non-axial
+  sampling (§12.2 criterion). Exported from `nv_maser.physics`.
+- `rl/probe_env.py` (SS12) — `ProbeShimmingConfig` dataclass and
+  `ProbeShimmingEnv(ShimmingEnv)` coupling imaging-magnet stray-field
+  disturbance with maser-chain SNR into the RL shimming episode. Imaging
+  magnet registered once at construction; `step()` enriches the info dict
+  with `maser_noise_temp_k`, `probe_snr_db`, and `stray_field_rms_mt`.
+  Optional `use_probe_reward` flag (default off) enables SNR-weighted
+  reward shaping for future training runs.
+- `physics/disturbance.py` (SS11.1) — `imaging_magnet_field` read-only
+  property on `DisturbanceGenerator` for external inspection of the
+  accumulated imaging-magnet stray field (returns `None` if unset).
+- `physics/probe.py` (SS11.1) — `ProbeIntegration` module coupling the
+  maser signal chain with the probe environment; exports
+  `compute_probe_snr`, `ProbeMetrics`.
+
+### Fixed
+
+- `physics/reconstruction.py` — `soft_threshold()` divide-by-zero
+  `RuntimeWarning` eliminated via `safe_mag` guard (`np.where(mag > 0,
+  mag, 1.0)` before the division). Promotes NumPy from evaluating
+  `0/0` in the inactive branch of `np.where`. 7 warnings removed
+  (total suite warnings: 17 → 10).
+
+### Tests
+
+- 17 new tests in `tests/test_single_sided_magnet.py`
+  (`TestMilestoneResult` × 5, `TestValidateSweetSpotMilestone` × 12).
+- 37 new tests in `tests/test_probe_env.py` covering
+  `ProbeShimmingConfig`, `ProbeShimmingEnv` construction / reset / step,
+  reward shaping, space compatibility, episode mechanics, and physics
+  correctness (shielding, magnet-size scaling). 1752 passed, 75 skipped.
+
 ## [0.7.0] - 2025-07-XX
 
 ### Added

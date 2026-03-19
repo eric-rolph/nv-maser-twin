@@ -77,6 +77,8 @@ from .single_sided_magnet import (  # noqa: F401
     SingleSidedMagnet,
     SweetSpotInfo,
     FieldMap2D,
+    MilestoneResult,
+    validate_sweet_spot_milestone,
 )
 from .magpylib_adapter import (  # noqa: F401
     MAGPYLIB_AVAILABLE,

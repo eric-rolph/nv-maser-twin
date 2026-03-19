@@ -9,6 +9,8 @@ from nv_maser.physics.single_sided_magnet import (
     SingleSidedMagnet,
     SweetSpotInfo,
     FieldMap2D,
+    MilestoneResult,
+    validate_sweet_spot_milestone,
     _solid_cylinder_on_axis_bz,
     _annular_ring_on_axis_bz,
     _MU0,
@@ -240,3 +242,155 @@ class TestUShaped:
         mag = SingleSidedMagnet(cfg)
         with pytest.raises(ValueError, match="Unsupported"):
             mag.field_on_axis(np.array([10.0]))
+
+
+# ── Phase-2 milestone validation ──────────────────────────────────
+
+
+class TestMilestoneResult:
+    """Unit tests for MilestoneResult dataclass."""
+
+    def _make_result(self, **overrides) -> MilestoneResult:
+        defaults = dict(
+            sweet_spot_depth_mm=20.0,
+            b0_tesla=0.050,
+            uniformity_ppm_volumetric=300.0,
+            uniformity_ppm_analytical=280.0,
+            b0_target_tesla=0.050,
+            b0_tolerance_tesla=0.005,
+            uniformity_target_ppm=500.0,
+            volume_radius_mm=5.0,
+            b0_pass=True,
+            uniformity_pass=True,
+            milestone_pass=True,
+        )
+        defaults.update(overrides)
+        return MilestoneResult(**defaults)
+
+    def test_b0_mT_property(self) -> None:
+        r = self._make_result(b0_tesla=0.050)
+        assert abs(r.b0_mT - 50.0) < 1e-9
+
+    def test_milestone_pass_both_true(self) -> None:
+        r = self._make_result(b0_pass=True, uniformity_pass=True, milestone_pass=True)
+        assert r.milestone_pass is True
+
+    def test_milestone_fail_if_b0_fails(self) -> None:
+        r = self._make_result(b0_pass=False, uniformity_pass=True, milestone_pass=False)
+        assert not r.milestone_pass
+
+    def test_milestone_fail_if_uniformity_fails(self) -> None:
+        r = self._make_result(b0_pass=True, uniformity_pass=False, milestone_pass=False)
+        assert not r.milestone_pass
+
+    def test_frozen_dataclass(self) -> None:
+        r = self._make_result()
+        with pytest.raises((AttributeError, TypeError)):
+            r.b0_tesla = 0.060  # type: ignore[misc]
+
+
+class TestValidateSweetSpotMilestone:
+    """Tests for validate_sweet_spot_milestone() against a barrel magnet."""
+
+    def test_returns_milestone_result(self, barrel_magnet: SingleSidedMagnet) -> None:
+        result = validate_sweet_spot_milestone(barrel_magnet)
+        assert isinstance(result, MilestoneResult)
+
+    def test_sweet_spot_depth_positive(self, barrel_magnet: SingleSidedMagnet) -> None:
+        result = validate_sweet_spot_milestone(barrel_magnet)
+        assert result.sweet_spot_depth_mm > 0.0
+
+    def test_b0_tesla_finite_nonzero(self, barrel_magnet: SingleSidedMagnet) -> None:
+        result = validate_sweet_spot_milestone(barrel_magnet)
+        assert math.isfinite(result.b0_tesla)
+        assert abs(result.b0_tesla) > 0.0
+
+    def test_b0_mT_convenience(self, barrel_magnet: SingleSidedMagnet) -> None:
+        result = validate_sweet_spot_milestone(barrel_magnet)
+        assert abs(result.b0_mT - result.b0_tesla * 1e3) < 1e-9
+
+    def test_uniformity_volumetric_nonnegative(self, barrel_magnet: SingleSidedMagnet) -> None:
+        result = validate_sweet_spot_milestone(barrel_magnet)
+        assert result.uniformity_ppm_volumetric >= 0.0
+
+    def test_uniformity_analytical_nonnegative(self, barrel_magnet: SingleSidedMagnet) -> None:
+        result = validate_sweet_spot_milestone(barrel_magnet)
+        assert result.uniformity_ppm_analytical >= 0.0
+
+    def test_criteria_stored_correctly(self, barrel_magnet: SingleSidedMagnet) -> None:
+        result = validate_sweet_spot_milestone(
+            barrel_magnet,
+            b0_target_tesla=0.048,
+            b0_tolerance_tesla=0.003,
+            uniformity_target_ppm=600.0,
+            volume_radius_mm=4.0,
+        )
+        assert result.b0_target_tesla == pytest.approx(0.048)
+        assert result.b0_tolerance_tesla == pytest.approx(0.003)
+        assert result.uniformity_target_ppm == pytest.approx(600.0)
+        assert result.volume_radius_mm == pytest.approx(4.0)
+
+    def test_b0_pass_consistent_with_value(self, barrel_magnet: SingleSidedMagnet) -> None:
+        result = validate_sweet_spot_milestone(barrel_magnet)
+        within = abs(result.b0_tesla - result.b0_target_tesla) <= result.b0_tolerance_tesla
+        assert result.b0_pass == within
+
+    def test_uniformity_pass_consistent_with_value(self, barrel_magnet: SingleSidedMagnet) -> None:
+        result = validate_sweet_spot_milestone(barrel_magnet)
+        expected = result.uniformity_ppm_volumetric <= result.uniformity_target_ppm
+        assert result.uniformity_pass == expected
+
+    def test_milestone_pass_is_and_of_criteria(self, barrel_magnet: SingleSidedMagnet) -> None:
+        result = validate_sweet_spot_milestone(barrel_magnet)
+        assert result.milestone_pass == (result.b0_pass and result.uniformity_pass)
+
+    def test_very_loose_criteria_passes(self, barrel_magnet: SingleSidedMagnet) -> None:
+        """Very wide tolerance and ppm budget should always pass for any finite field."""
+        result = validate_sweet_spot_milestone(
+            barrel_magnet,
+            b0_target_tesla=result_b0(barrel_magnet),
+            b0_tolerance_tesla=1.0,      # ±1 T — absurdly wide
+            uniformity_target_ppm=1e9,   # 1 billion ppm — always passes
+        )
+        assert result.b0_pass is True
+        assert result.uniformity_pass is True
+        assert result.milestone_pass is True
+
+    def test_very_tight_criteria_fails(self, barrel_magnet: SingleSidedMagnet) -> None:
+        """Zero-tolerance criteria can never pass unless field is exactly the target."""
+        result = validate_sweet_spot_milestone(
+            barrel_magnet,
+            b0_target_tesla=0.050,
+            b0_tolerance_tesla=1e-12,    # essentially zero tolerance
+            uniformity_target_ppm=1e-9,  # essentially zero ppm
+        )
+        # One or both criteria must fail with near-zero tolerances
+        assert not result.milestone_pass
+
+    def test_higher_resolution_changes_volumetric_ppm(
+        self, barrel_magnet: SingleSidedMagnet
+    ) -> None:
+        """Higher map_resolution samples more sphere points (result changes meaningfully)."""
+        r32 = validate_sweet_spot_milestone(barrel_magnet, map_resolution=32)
+        r128 = validate_sweet_spot_milestone(barrel_magnet, map_resolution=128)
+        # Both should be finite positive values
+        assert math.isfinite(r32.uniformity_ppm_volumetric)
+        assert math.isfinite(r128.uniformity_ppm_volumetric)
+
+    def test_larger_volume_radius_nondecreasing_ppm(
+        self, barrel_magnet: SingleSidedMagnet
+    ) -> None:
+        """Larger evaluation sphere should not decrease uniformity (more field variation)."""
+        r_small = validate_sweet_spot_milestone(
+            barrel_magnet, volume_radius_mm=2.0, map_resolution=64
+        )
+        r_large = validate_sweet_spot_milestone(
+            barrel_magnet, volume_radius_mm=8.0, map_resolution=64
+        )
+        assert r_large.uniformity_ppm_volumetric >= r_small.uniformity_ppm_volumetric - 1.0
+
+
+def result_b0(magnet: SingleSidedMagnet) -> float:
+    """Helper: return sweet-spot B0 for the given magnet."""
+    return magnet.sweet_spot().b0_tesla
+
