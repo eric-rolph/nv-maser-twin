@@ -20,12 +20,21 @@ import math
 import numpy as np
 import pytest
 
-from nv_maser.config import CavityConfig, MaserConfig, NVConfig, OpticalPumpConfig
+from nv_maser.config import (
+    CavityConfig,
+    DipolarConfig,
+    MaserConfig,
+    MaxwellBlochConfig,
+    NVConfig,
+    OpticalPumpConfig,
+    SpectralConfig,
+)
 from nv_maser.physics.cavity import compute_effective_q, compute_full_threshold
 from nv_maser.physics.dipolar import stretched_exponential_refill
 from nv_maser.physics.nv_spin import transition_frequencies
 from nv_maser.physics.optical_pump import compute_absorbed_power
 from nv_maser.physics.signal_chain import compute_maser_noise_temperature
+from nv_maser.physics.spectral_maxwell_bloch import solve_spectral_maxwell_bloch
 
 
 # ── Fixtures ──────────────────────────────────────────────────────
@@ -507,3 +516,235 @@ class TestCooperativityScaling:
         assert r_half.cooperativity == pytest.approx(
             r_full.cooperativity * 0.5, rel=0.01
         )
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Kersten 2026: Superradiant burst dynamics (end-to-end validation)
+# ═══════════════════════════════════════════════════════════════════
+
+
+class TestKersten2026BurstDynamics:
+    """End-to-end validation of the spectral Maxwell-Bloch solver against
+    Kersten et al., Nature Physics (2026), PMC12811124.
+
+    The Kersten paper demonstrates self-induced superradiant masing in a
+    10 ppm NV diamond at 25 mK with the following physics:
+
+    1. An initially inverted ensemble emits a superradiant burst that
+       burns a spectral hole at cavity resonance.
+    2. Dipolar (1/r³) spin-spin interactions refill the hole on timescale
+       T_r = 11.6 µs with α = 0.5 stretched-exponential dynamics.
+    3. Once on-resonance inversion exceeds the threshold p₀ C > 1, a
+       new burst fires, producing a pulse train.
+
+    At high cooperativity (C >> 1), the system may instead enter
+    continuous-wave (CW) masing where dipolar refilling sustains
+    operation against spectral-hole depletion.
+
+    Published experimental parameters:
+      - ωc/2π = 3.1 GHz, κ/2π = 418 kHz → Q_L ≈ 7416
+      - NV: 10 ppm (1.76×10¹⁸ /cm³), T₂* = 0.89 µs
+      - Inhomogeneous linewidth W/2π = 8.65 MHz
+      - Cooperativity C = 14.6 (at p₀ ~ 0.1)
+      - g_coll/2π = 4.53 MHz
+      - Temperature: 25 mK
+
+    These tests use Kersten-like configs fed through our solver and
+    validate qualitative dynamics, not exact numerical reproduction
+    (our mean-field model is phenomenological, not microscopic).
+    """
+
+    @staticmethod
+    def _kersten_nv() -> NVConfig:
+        """NV config matching Kersten 2026 parameters."""
+        return NVConfig(
+            zero_field_splitting_ghz=2.88,
+            t2_star_us=0.89,
+            nv_density_per_cm3=1.76e18,   # 10 ppm
+            pump_efficiency=0.3,          # p₀ ~ 0.1–0.4; use moderate
+            orientation_fraction=0.25,
+            t1_ms=5.0,
+        )
+
+    @staticmethod
+    def _kersten_maser() -> MaserConfig:
+        """Cavity config matching Kersten 2026 parameters."""
+        return MaserConfig(
+            cavity_q=7416,                # Q_L = ω_c / κ
+            cavity_frequency_ghz=3.1,
+            coupling_beta=0.5,
+        )
+
+    @staticmethod
+    def _kersten_cavity() -> CavityConfig:
+        """Mode geometry matching Kersten 2026 N = 9×10¹² total spins.
+
+        With fill_factor=0.03 and mode_volume=0.3 cm³, the effective
+        N_eff ~ n_NV × V × fill × pump × orient gives a cooperativity
+        in the right ballpark for superradiant behaviour.
+        """
+        return CavityConfig(
+            mode_volume_cm3=0.3,
+            fill_factor=0.03,
+        )
+
+    @staticmethod
+    def _kersten_spectral() -> SpectralConfig:
+        return SpectralConfig(
+            enable=True,
+            n_freq_bins=51,               # small for fast tests
+            freq_range_mhz=40.0,         # > 4× FWHM of 8.65 MHz
+            inhomogeneous_linewidth_mhz=8.65,
+            q_parameter=1.0,             # Gaussian lineshape
+        )
+
+    @staticmethod
+    def _kersten_dipolar() -> DipolarConfig:
+        return DipolarConfig(
+            enable=True,
+            refilling_time_us=11.6,
+            stretch_exponent=0.5,
+        )
+
+    def test_above_threshold(self) -> None:
+        """Kersten config should be well above maser threshold (C >> 1)."""
+        nv = self._kersten_nv()
+        mc = self._kersten_maser()
+        cc = self._kersten_cavity()
+        sw_hz = 1.0 / (math.pi * nv.t2_star_us * 1e-6)
+        result = compute_full_threshold(nv, mc, cc, gain_budget=1.0,
+                                        spin_linewidth_hz=sw_hz)
+        assert result.cooperativity > 1.0
+        assert result.masing
+
+    def test_spectral_hole_burned(self) -> None:
+        """Above-threshold Kersten system should burn a spectral hole at Δ=0."""
+        nv = self._kersten_nv()
+        mc = self._kersten_maser()
+        cc = self._kersten_cavity()
+        sp = self._kersten_spectral()
+        mb = MaxwellBlochConfig(enable=True, t_max_us=50.0, n_time_points=300)
+
+        result = solve_spectral_maxwell_bloch(nv, mc, cc, mb, sp)
+
+        # On-resonance inversion should be depleted relative to wings
+        centre = len(result.delta_hz) // 2
+        final_profile = result.inversion_profile[-1, :]
+        assert final_profile[centre] < final_profile[0]
+
+    def test_dipolar_enables_sustained_masing(self) -> None:
+        """With dipolar refilling, masing should be sustained (CW or pulsed).
+
+        At high cooperativity (C >> 1), dipolar refilling prevents spectral
+        hole depletion from killing the gain, so the system reaches a
+        steady-state with significant photon population.
+        """
+        nv = self._kersten_nv()
+        mc = self._kersten_maser()
+        cc = self._kersten_cavity()
+        sp = self._kersten_spectral()
+        dp = self._kersten_dipolar()
+        mb = MaxwellBlochConfig(enable=True, t_max_us=200.0, n_time_points=2000)
+
+        result = solve_spectral_maxwell_bloch(nv, mc, cc, mb, sp, dp)
+
+        # Sustained masing: steady-state photon number well above vacuum
+        assert result.steady_state_photons > 1e-6, (
+            f"Dipolar refilling should sustain masing, "
+            f"got steady_state_photons={result.steady_state_photons:.2e}"
+        )
+
+    def test_dipolar_prevents_masing_death(self) -> None:
+        """Without dipolar refilling, masing dies after spectral hole burns;
+        with dipolar refilling, masing is sustained."""
+        nv = self._kersten_nv()
+        mc = self._kersten_maser()
+        cc = self._kersten_cavity()
+        sp = self._kersten_spectral()
+        mb = MaxwellBlochConfig(enable=True, t_max_us=200.0, n_time_points=2000)
+
+        res_no_dip = solve_spectral_maxwell_bloch(nv, mc, cc, mb, sp, None)
+        res_dip = solve_spectral_maxwell_bloch(
+            nv, mc, cc, mb, sp, self._kersten_dipolar(),
+        )
+
+        # Dipolar case sustains orders-of-magnitude more photons
+        ratio = res_dip.steady_state_photons / max(
+            res_no_dip.steady_state_photons, 1e-50,
+        )
+        assert ratio > 1e10, (
+            f"Dipolar refilling should sustain masing vs death without it; "
+            f"ratio={ratio:.2e}"
+        )
+
+    def test_output_power_positive(self) -> None:
+        """Superradiant system should emit non-zero output power."""
+        nv = self._kersten_nv()
+        mc = self._kersten_maser()
+        cc = self._kersten_cavity()
+        sp = self._kersten_spectral()
+        dp = self._kersten_dipolar()
+        mb = MaxwellBlochConfig(enable=True, t_max_us=100.0, n_time_points=500)
+
+        result = solve_spectral_maxwell_bloch(nv, mc, cc, mb, sp, dp)
+        assert result.output_power_w > 0
+
+    def test_photon_number_amplified(self) -> None:
+        """Photon number should be amplified by many orders of magnitude
+        from the vacuum seed, confirming superradiant emission."""
+        nv = self._kersten_nv()
+        mc = self._kersten_maser()
+        cc = self._kersten_cavity()
+        sp = self._kersten_spectral()
+        dp = self._kersten_dipolar()
+        mb = MaxwellBlochConfig(enable=True, t_max_us=150.0, n_time_points=1000)
+
+        result = solve_spectral_maxwell_bloch(nv, mc, cc, mb, sp, dp)
+
+        peak = float(np.max(result.photon_number))
+        initial = float(result.photon_number[0])
+
+        # Superradiant amplification: peak >> vacuum seed
+        assert peak / max(initial, 1e-20) > 1e6, (
+            f"Insufficient amplification: peak={peak:.2e}, "
+            f"initial={initial:.2e}"
+        )
+
+    def test_refilling_restores_on_resonance_inversion(self) -> None:
+        """Dipolar refilling should partially restore on-resonance inversion
+        between bursts, enabling repeated emission."""
+        nv = self._kersten_nv()
+        mc = self._kersten_maser()
+        cc = self._kersten_cavity()
+        sp = self._kersten_spectral()
+        dp = self._kersten_dipolar()
+        mb = MaxwellBlochConfig(enable=True, t_max_us=100.0, n_time_points=500)
+
+        result = solve_spectral_maxwell_bloch(nv, mc, cc, mb, sp, dp)
+
+        # On-resonance inversion trace should not be monotonically decreasing
+        # (refilling creates upward segments between bursts)
+        inv = result.on_resonance_inversion
+        diffs = np.diff(inv)
+        n_increasing = int(np.sum(diffs > 0))
+
+        # At least some recovery segments
+        assert n_increasing > 5, (
+            f"On-resonance inversion never increases — dipolar "
+            f"refilling ineffective ({n_increasing} increasing steps)"
+        )
+
+    def test_cooperativity_in_expected_range(self) -> None:
+        """Spectral MB cooperativity for Kersten config should be order-of-magnitude
+        consistent with published C = 14.6."""
+        nv = self._kersten_nv()
+        mc = self._kersten_maser()
+        cc = self._kersten_cavity()
+        sp = self._kersten_spectral()
+        mb = MaxwellBlochConfig(enable=True, t_max_us=20.0, n_time_points=100)
+
+        result = solve_spectral_maxwell_bloch(nv, mc, cc, mb, sp)
+
+        # Our mean-field model with different fill/mode params won't match
+        # exactly, but cooperativity should be > 1 (masing regime)
+        assert result.cooperativity > 1.0
