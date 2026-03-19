@@ -260,3 +260,36 @@ from .maser_gain_frequency import (  # noqa: F401
     compute_saturation_power,
     gain_curve_from_mb_result,
 )
+from .pulse_sequence import (  # noqa: F401
+    SpinEchoResult,
+    CPMGResult,
+    GREResult,
+    InversionRecoveryResult,
+    SNREfficiency,
+    simulate_spin_echo,
+    simulate_cpmg,
+    simulate_gre,
+    simulate_inversion_recovery,
+    ernst_angle,
+    optimal_te_for_contrast,
+    snr_efficiency,
+)
+from .up_conversion import (  # noqa: F401
+    MixerSpec,
+    DEFAULT_MIXER,
+    UpConversionResult,
+    UpConversionNoiseContribution,
+    compute_up_conversion,
+    compute_mixer_noise_contribution,
+    compute_lo_frequency_ghz,
+    compute_bandwidth_utilization,
+    friis_system_temperature_with_mixer,
+)
+from .snr_calculator import (  # noqa: F401
+    SNRBudget,
+    compute_snr_budget,
+    snr_vs_depth,
+    snr_vs_averages,
+    snr_vs_voxel_size,
+    required_averages_for_snr,
+)
