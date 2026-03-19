@@ -251,3 +251,12 @@ from .q_boost import (  # noqa: F401
     compute_noise_temperature_boosted,
     compute_sql_limit_ratio,
 )
+from .maser_gain_frequency import (  # noqa: F401
+    GainCurveResult,
+    compute_gain_curve,
+    compute_bandwidth_3db,
+    bandwidth_analytical,
+    compute_gain_bandwidth_product,
+    compute_saturation_power,
+    gain_curve_from_mb_result,
+)

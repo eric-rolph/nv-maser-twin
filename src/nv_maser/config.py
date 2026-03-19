@@ -379,6 +379,15 @@ class MaserConfig(BaseModel):
             "Must be < 1 for stability."
         ),
     )
+    maser_probe_power_dbm: float = Field(
+        -120.0,
+        description=(
+            "Reference probe input power (dBm) for gain-curve and "
+            "saturation calculations.  –120 dBm (1 pW) is the small-signal "
+            "limit used in Wang et al. (2024) gain measurements.  "
+            "Set to a higher value to model gain compression."
+        ),
+    )
 
 
 class CavityConfig(BaseModel):
