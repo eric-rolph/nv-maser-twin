@@ -336,3 +336,20 @@ from .reconstruction import (  # noqa: F401
     sweep_snr_vs_acceleration,
     sweep_resolution_vs_fov,
 )
+from .disturbance import (  # noqa: F401
+    ImagingMagnetDisturbanceConfig,
+    compute_imaging_magnet_stray_field,
+    DisturbanceGenerator,
+)
+from .probe import (  # noqa: F401
+    ProbeConfig,
+    ProbePerformanceReport,
+    HandheldProbe,
+    compute_stray_field_rms,
+    compute_probe_performance,
+    sweep_snr_vs_depth,
+    sweep_snr_vs_averages,
+    sweep_lateral_resolution_vs_n_lines,
+    sweep_stray_field_vs_separation,
+    sweep_depth_resolution_vs_bandwidth,
+)

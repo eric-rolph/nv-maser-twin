@@ -179,3 +179,138 @@ def test_transient_disabled_by_default(grid: SpatialGrid) -> None:
     for _ in range(100):
         gen.generate(t=float(_) * 0.001)
     assert len(gen._active_transients) == 0
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Imaging-magnet stray field — §11.1 extension
+# ═══════════════════════════════════════════════════════════════════════
+
+from nv_maser.physics.disturbance import (
+    ImagingMagnetDisturbanceConfig,
+    compute_imaging_magnet_stray_field,
+)
+
+
+def test_imaging_magnet_config_defaults() -> None:
+    """ImagingMagnetDisturbanceConfig has expected physical defaults."""
+    cfg = ImagingMagnetDisturbanceConfig()
+    assert cfg.offset_x_mm == 40.0
+    assert cfg.offset_y_mm == 0.0
+    assert cfg.offset_z_mm == 0.0
+    assert cfg.magnet_volume_m3 == pytest.approx(2.0e-5, rel=1e-6)
+    assert cfg.remanence_tesla == pytest.approx(1.3, rel=1e-6)
+    assert cfg.effective_dipole_moment_am2 is None
+    assert cfg.shield_attenuation_db == 0.0
+
+
+def test_imaging_magnet_config_frozen() -> None:
+    """ImagingMagnetDisturbanceConfig is immutable (frozen dataclass)."""
+    cfg = ImagingMagnetDisturbanceConfig()
+    with pytest.raises((AttributeError, TypeError)):
+        cfg.offset_x_mm = 50.0  # type: ignore[misc]
+
+
+def test_compute_stray_field_shape(grid: SpatialGrid) -> None:
+    """compute_imaging_magnet_stray_field returns (size, size) float32."""
+    cfg = ImagingMagnetDisturbanceConfig(offset_x_mm=40.0)
+    field = compute_imaging_magnet_stray_field(grid, cfg)
+    assert field.shape == (grid.size, grid.size)
+    assert field.dtype == np.float32
+
+
+def test_compute_stray_field_finite(grid: SpatialGrid) -> None:
+    """Stray field contains no NaN or Inf values."""
+    cfg = ImagingMagnetDisturbanceConfig(offset_x_mm=40.0)
+    field = compute_imaging_magnet_stray_field(grid, cfg)
+    assert np.all(np.isfinite(field))
+
+
+def test_compute_stray_field_nonzero(grid: SpatialGrid) -> None:
+    """Stray field is non-zero when the magnet has a finite offset."""
+    cfg = ImagingMagnetDisturbanceConfig(offset_x_mm=40.0)
+    field = compute_imaging_magnet_stray_field(grid, cfg)
+    assert np.any(field != 0.0)
+
+
+def test_compute_stray_field_decreases_with_offset(grid: SpatialGrid) -> None:
+    """RMS stray field decreases as the magnet is moved further away."""
+    cfg_near = ImagingMagnetDisturbanceConfig(offset_x_mm=30.0)
+    cfg_far = ImagingMagnetDisturbanceConfig(offset_x_mm=80.0)
+    field_near = compute_imaging_magnet_stray_field(grid, cfg_near)
+    field_far = compute_imaging_magnet_stray_field(grid, cfg_far)
+    rms_near = float(np.sqrt(np.mean(field_near**2)))
+    rms_far = float(np.sqrt(np.mean(field_far**2)))
+    assert rms_near > rms_far
+
+
+def test_shielding_reduces_field(grid: SpatialGrid) -> None:
+    """Applying shield_attenuation_db reduces the field magnitude."""
+    cfg_unshielded = ImagingMagnetDisturbanceConfig(offset_x_mm=40.0, shield_attenuation_db=0.0)
+    cfg_shielded = ImagingMagnetDisturbanceConfig(offset_x_mm=40.0, shield_attenuation_db=50.0)
+    field_unshielded = compute_imaging_magnet_stray_field(grid, cfg_unshielded)
+    field_shielded = compute_imaging_magnet_stray_field(grid, cfg_shielded)
+    rms_u = float(np.sqrt(np.mean(field_unshielded**2)))
+    rms_s = float(np.sqrt(np.mean(field_shielded**2)))
+    assert rms_s < rms_u
+    # 50 dB → factor ~316 reduction; check at least 100×
+    assert rms_u / rms_s > 100.0
+
+
+def test_add_imaging_magnet_changes_generate(grid: SpatialGrid) -> None:
+    """generate() output differs after add_imaging_magnet() is called."""
+    cfg = DisturbanceConfig(seed=0, num_modes=1, max_amplitude_tesla=0.0,
+                            temporal_drift_rate=0.0)
+    gen = DisturbanceGenerator(grid, cfg)
+    before = gen.generate(t=0.0).copy()
+
+    magnet_cfg = ImagingMagnetDisturbanceConfig(offset_x_mm=40.0)
+    gen.add_imaging_magnet(magnet_cfg)
+    after = gen.generate(t=0.0)
+
+    assert not np.allclose(before, after)
+
+
+def test_clear_imaging_magnets_restores(grid: SpatialGrid) -> None:
+    """clear_imaging_magnets() removes the stray field contribution."""
+    cfg = DisturbanceConfig(seed=0, num_modes=1, max_amplitude_tesla=0.0,
+                            temporal_drift_rate=0.0)
+    gen = DisturbanceGenerator(grid, cfg)
+    before = gen.generate(t=0.0).copy()
+
+    gen.add_imaging_magnet(ImagingMagnetDisturbanceConfig(offset_x_mm=40.0))
+    gen.clear_imaging_magnets()
+
+    after = gen.generate(t=0.0)
+    np.testing.assert_array_equal(before, after)
+
+
+def test_randomize_does_not_clear_imaging_magnet(grid: SpatialGrid) -> None:
+    """randomize() must NOT remove the imaging-magnet stray field."""
+    cfg = DisturbanceConfig(seed=0, num_modes=1, max_amplitude_tesla=0.0,
+                            temporal_drift_rate=0.0)
+    gen = DisturbanceGenerator(grid, cfg)
+    gen.add_imaging_magnet(ImagingMagnetDisturbanceConfig(offset_x_mm=40.0))
+
+    # Capture generate output after adding magnet
+    d_before_randomize = gen.generate(t=0.0).copy()
+    gen.randomize()
+    # After randomize (num_modes=0), generate result should equal the stray field alone
+    d_after_randomize = gen.generate(t=0.0)
+
+    # The stray field is deterministic, so the outputs should be equal
+    np.testing.assert_array_equal(d_before_randomize, d_after_randomize)
+
+
+def test_effective_dipole_moment_override(grid: SpatialGrid) -> None:
+    """effective_dipole_moment_am2 overrides the computed default."""
+    cfg_auto = ImagingMagnetDisturbanceConfig(offset_x_mm=40.0)
+    # Use a very small dipole moment
+    cfg_small = ImagingMagnetDisturbanceConfig(
+        offset_x_mm=40.0,
+        effective_dipole_moment_am2=1e-6,
+    )
+    field_auto = compute_imaging_magnet_stray_field(grid, cfg_auto)
+    field_small = compute_imaging_magnet_stray_field(grid, cfg_small)
+    rms_auto = float(np.sqrt(np.mean(field_auto**2)))
+    rms_small = float(np.sqrt(np.mean(field_small**2)))
+    assert rms_auto > rms_small
