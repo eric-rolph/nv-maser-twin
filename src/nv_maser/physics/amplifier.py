@@ -77,6 +77,7 @@ from .cavity import (
     CavityProperties,
     ThresholdResult,
     compute_cavity_properties,
+    compute_effective_q,
     compute_full_threshold,
 )
 
@@ -495,10 +496,10 @@ def compute_amplifier_properties(
     Returns:
         :class:`AmplifierProperties` with all amplifier metrics.
     """
-    # ── Q factors ──────────────────────────────────────────────────
-    q_loaded = maser_config.cavity_q            # Q_L (loaded)
+    # ── Q factors (with optional Q-boost) ──────────────────────────
+    q_loaded = compute_effective_q(maser_config)  # Q_L_eff (boosted if q_boost_gain > 0)
     beta = maser_config.coupling_beta
-    q_unloaded = q_loaded * (1.0 + beta)         # Q₀ = Q_L (1+β)
+    q_unloaded = q_loaded * (1.0 + beta)            # Q₀_eff = Q_L_eff (1+β)
 
     # ── Magnetic quality factor ────────────────────────────────────
     q_m = compute_magnetic_q(nv_config, cavity_config, maser_config)

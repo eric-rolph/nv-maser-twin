@@ -877,3 +877,76 @@ class TestMaserGainResult:
         r = compute_maser_gain(_WANG_FC_HZ, q_m=1500.0, q_l=1000.0)
         assert "gain_db" in repr(r)
 
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Q-boost integration: compute_amplifier_properties respects q_boost_gain
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestAmplifierQBoostIntegration:
+    """Verify that compute_amplifier_properties uses effective Q when boosted."""
+
+    def test_no_boost_matches_raw_cavity_q(self, default_nv, default_cav):
+        """q_boost_gain=0 → loaded_q = cavity_q (unchanged)."""
+        maser = MaserConfig(cavity_q=10_000, q_boost_gain=0.0)
+        result = compute_amplifier_properties(default_nv, default_cav, maser)
+        assert result.loaded_q == pytest.approx(10_000.0)
+
+    def test_boost_raises_loaded_q(self, default_nv, default_cav):
+        """q_boost_gain=0.5 → loaded_q = cavity_q / (1 - 0.5) = 2× cavity_q."""
+        maser = MaserConfig(cavity_q=10_000, q_boost_gain=0.5)
+        result = compute_amplifier_properties(default_nv, default_cav, maser)
+        assert result.loaded_q == pytest.approx(20_000.0)
+
+    def test_boost_raises_unloaded_q(self, default_nv, default_cav):
+        """Q₀ = Q_L_eff × (1 + β)."""
+        beta = 0.5
+        maser = MaserConfig(cavity_q=10_000, coupling_beta=beta, q_boost_gain=0.5)
+        result = compute_amplifier_properties(default_nv, default_cav, maser)
+        expected_q0 = 20_000.0 * (1.0 + beta)
+        assert result.unloaded_q == pytest.approx(expected_q0)
+
+    def test_high_boost_like_wang_2024(self, default_nv, default_cav):
+        """Wang 2024: g_fb ≈ 0.983 boosts Q_L from 1.1e4 to ~6.5e5."""
+        g_fb = 1.0 - 1.0 / 59.0  # ≈ 0.9831
+        maser = MaserConfig(cavity_q=11_000, q_boost_gain=g_fb)
+        result = compute_amplifier_properties(default_nv, default_cav, maser)
+        assert result.loaded_q == pytest.approx(11_000 * 59.0, rel=0.01)
+
+    def test_boost_can_cross_threshold(self, default_nv, default_cav):
+        """System below threshold without boost may cross it with Q-boost."""
+        # With low Q, Q_m > Q_L → below threshold
+        maser_passive = MaserConfig(cavity_q=100, q_boost_gain=0.0)
+        result_passive = compute_amplifier_properties(
+            default_nv, default_cav, maser_passive
+        )
+
+        # Boost Q by 100× → Q_L_eff = 10_000, may cross threshold
+        maser_boosted = MaserConfig(cavity_q=100, q_boost_gain=0.99)
+        result_boosted = compute_amplifier_properties(
+            default_nv, default_cav, maser_boosted
+        )
+
+        # We can't guarantee threshold crossing for all parameter combos,
+        # but loaded_q should be dramatically higher
+        assert result_boosted.loaded_q > result_passive.loaded_q * 50
+
+    def test_boost_does_not_change_magnetic_q(self, default_nv, default_cav):
+        """Q_m depends on spin parameters, not cavity Q-boost."""
+        maser_passive = MaserConfig(cavity_q=10_000, q_boost_gain=0.0)
+        maser_boosted = MaserConfig(cavity_q=10_000, q_boost_gain=0.9)
+        r1 = compute_amplifier_properties(default_nv, default_cav, maser_passive)
+        r2 = compute_amplifier_properties(default_nv, default_cav, maser_boosted)
+        assert r1.magnetic_q == pytest.approx(r2.magnetic_q, rel=1e-10)
+
+    def test_boost_lowers_noise_temperature(self, default_nv, default_cav):
+        """Higher Q₀_eff → lower T_a (Wang Eq. 4: T_a → T_s as Q₀_eff → ∞)."""
+        maser_passive = MaserConfig(cavity_q=10_000, q_boost_gain=0.0)
+        maser_boosted = MaserConfig(cavity_q=10_000, q_boost_gain=0.9)
+        r1 = compute_amplifier_properties(default_nv, default_cav, maser_passive)
+        r2 = compute_amplifier_properties(default_nv, default_cav, maser_boosted)
+        # Both must be finite for comparison (nan when at threshold)
+        if math.isnan(r1.noise_temperature_k) or math.isnan(r2.noise_temperature_k):
+            pytest.skip("Noise temp nan at threshold boundary")
+        assert r2.noise_temperature_k <= r1.noise_temperature_k
+
