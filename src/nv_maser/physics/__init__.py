@@ -40,6 +40,15 @@ from .pulsed_pump import (  # noqa: F401
     compute_pulsed_inversion,
     compute_equivalent_cw_power,
 )
+from .pulsed_pump_optimizer import (  # noqa: F401
+    PulseCandidate,
+    OptimizedSequence,
+    PulsedThresholdResult,
+    CWvsPulsedReport,
+    optimize_pulse_sequence,
+    compute_pulsed_threshold,
+    compare_cw_vs_pulsed,
+)
 from .maxwell_bloch import (  # noqa: F401
     MaxwellBlochResult,
     solve_maxwell_bloch,
