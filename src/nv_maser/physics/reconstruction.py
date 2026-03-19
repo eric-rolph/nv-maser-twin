@@ -474,7 +474,8 @@ def soft_threshold(x: NDArray, threshold: float) -> NDArray:
         Thresholded array.
     """
     mag = np.abs(x)
-    scale = np.where(mag > threshold, (mag - threshold) / mag, 0.0)
+    safe_mag = np.where(mag > 0.0, mag, 1.0)  # avoid divide-by-zero in np.where branches
+    scale = np.where(mag > threshold, (mag - threshold) / safe_mag, 0.0)
     return x * scale
 
 

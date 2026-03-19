@@ -326,3 +326,12 @@ class DisturbanceGenerator:
         imaging-magnet contribution.
         """
         self._imaging_magnet_field = None
+
+    @property
+    def imaging_magnet_field(self) -> NDArray[np.float32] | None:
+        """Read-only access to the accumulated imaging-magnet stray field (T).
+
+        Returns ``None`` if no imaging magnet has been registered via
+        ``add_imaging_magnet()``.  The array shape is ``(size, size)``.
+        """
+        return self._imaging_magnet_field
