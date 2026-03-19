@@ -20,10 +20,13 @@ from src.nv_maser.config import CavityConfig, MaserConfig, NVConfig
 from src.nv_maser.physics.amplifier import (
     SIGMA_2,
     AmplifierProperties,
+    MaserGainResult,
     OutputPowerResult,
     _derive_population_fractions,
+    _gain_voltage,
     compute_amplifier_properties,
     compute_magnetic_q,
+    compute_maser_gain,
     compute_noise_temperature,
     compute_output_power,
     compute_sql_noise_temperature,
@@ -633,3 +636,244 @@ class TestQuantitativeChecks:
         # Wang achieved amplification: Q_m ≈ Q_L (just above threshold boundary)
         # With approximate parameters, Q_m should be within 10× of Q_L = 11,000
         assert 1_000 < q_m < 1_000_000, f"Q_m = {q_m:.2e} outside expected range"
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 8. _gain_voltage (internal helper)
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestGainVoltage:
+    """Tests for the _gain_voltage helper (|S₁₁| at resonance)."""
+
+    def test_critical_coupling_formula_beta_one(self):
+        """β=1: |S₁₁| = Q_L / (Q_m − Q_L)."""
+        q_l, q_m = 1000.0, 1200.0
+        s11 = _gain_voltage(q_m, q_l, coupling_beta=1.0)
+        expected = q_l / (q_m - q_l)
+        assert abs(s11 - expected) < 1e-9 * expected
+
+    def test_at_threshold_returns_nan(self):
+        """Q_m = Q_L → denominator zero → nan."""
+        s11 = _gain_voltage(q_m=1000.0, q_l=1000.0, coupling_beta=1.0)
+        assert math.isnan(s11)
+
+    def test_above_threshold_returns_nan(self):
+        """Q_m < Q_L (oscillator regime) → nan."""
+        s11 = _gain_voltage(q_m=800.0, q_l=1000.0, coupling_beta=1.0)
+        assert math.isnan(s11)
+
+    def test_large_margin_small_amplitude(self):
+        """Q_m ≫ Q_L → |S₁₁| → Q_L/Q_m ≪ 1 (no gain, just passes through)."""
+        q_l, q_m = 1000.0, 1_000_000.0
+        s11 = _gain_voltage(q_m, q_l, coupling_beta=1.0)
+        # Should be ≈ Q_L/Q_m = 0.001 (no significant gain)
+        assert s11 == pytest.approx(q_l / (q_m - q_l), rel=1e-6)
+
+    def test_overcoupled_beta_two_gives_higher_amplitude(self):
+        """β=2 (overcoupled) provides higher |S₁₁| than β=1 at same Q values."""
+        q_l, q_m = 1000.0, 1200.0
+        s11_critical = _gain_voltage(q_m, q_l, coupling_beta=1.0)
+        s11_overcoupled = _gain_voltage(q_m, q_l, coupling_beta=2.0)
+        assert s11_overcoupled > s11_critical
+
+    def test_undercoupled_beta_zero_gives_no_coupling(self):
+        """β→0 (fully undercoupled): S₁₁ → -1 (all reflected, no amplification)."""
+        s11 = _gain_voltage(q_m=1200.0, q_l=1000.0, coupling_beta=1e-6)
+        # n = (β-1)/(Q_L(1+β)) + 1/Q_m ≈ -1/Q_L + 1/Q_m (small β)
+        # d = 1/Q_L - 1/Q_m
+        # s11 ≈ (-1/Q_L + 1/Q_m)/(1/Q_L - 1/Q_m) = -1
+        assert s11 == pytest.approx(-1.0, abs=1e-3)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 9. compute_maser_gain
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+# Wang 2024 self-consistent experimental parameters (derived from G=14.5 dB, B=340 kHz):
+#   f_c = 2.87 GHz, Q_L = 1337, Q_m = 1589, β = 1
+_WANG_FC_HZ = 2.87e9
+_WANG_QL = 1337.0
+_WANG_QM = 1589.0
+_WANG_BETA = 1.0
+
+
+class TestComputeMaserGain:
+    """Tests for compute_maser_gain — gain, bandwidth, operating margins."""
+
+    def test_returns_maser_gain_result_type(self):
+        result = compute_maser_gain(_WANG_FC_HZ, _WANG_QM, _WANG_QL)
+        assert isinstance(result, MaserGainResult)
+
+    def test_below_threshold_flag_set_correctly_when_below(self):
+        result = compute_maser_gain(_WANG_FC_HZ, q_m=1500.0, q_l=1000.0)
+        assert result.below_threshold is True
+
+    def test_below_threshold_flag_false_when_equal(self):
+        result = compute_maser_gain(_WANG_FC_HZ, q_m=1000.0, q_l=1000.0)
+        assert result.below_threshold is False
+
+    def test_below_threshold_flag_false_when_above(self):
+        result = compute_maser_gain(_WANG_FC_HZ, q_m=800.0, q_l=1000.0)
+        assert result.below_threshold is False
+
+    def test_margin_positive_when_below_threshold(self):
+        result = compute_maser_gain(_WANG_FC_HZ, q_m=1500.0, q_l=1000.0)
+        assert result.margin_to_threshold > 0.0
+
+    def test_margin_zero_at_threshold(self):
+        result = compute_maser_gain(_WANG_FC_HZ, q_m=1000.0, q_l=1000.0)
+        assert result.margin_to_threshold == pytest.approx(0.0, abs=1e-12)
+
+    def test_margin_negative_above_threshold(self):
+        result = compute_maser_gain(_WANG_FC_HZ, q_m=700.0, q_l=1000.0)
+        assert result.margin_to_threshold < 0.0
+
+    def test_margin_formula_correct(self):
+        q_m, q_l = 1500.0, 1000.0
+        result = compute_maser_gain(_WANG_FC_HZ, q_m=q_m, q_l=q_l)
+        assert result.margin_to_threshold == pytest.approx(q_m / q_l - 1.0, rel=1e-9)
+
+    def test_gain_positive_below_threshold(self):
+        result = compute_maser_gain(_WANG_FC_HZ, q_m=1500.0, q_l=1000.0)
+        assert result.gain_db > 0.0
+
+    def test_gain_nan_at_threshold(self):
+        result = compute_maser_gain(_WANG_FC_HZ, q_m=1000.0, q_l=1000.0)
+        assert math.isnan(result.gain_db)
+
+    def test_gain_nan_above_threshold(self):
+        result = compute_maser_gain(_WANG_FC_HZ, q_m=700.0, q_l=1000.0)
+        assert math.isnan(result.gain_db)
+
+    def test_bandwidth_positive_below_threshold(self):
+        result = compute_maser_gain(_WANG_FC_HZ, q_m=1500.0, q_l=1000.0)
+        assert result.bandwidth_hz > 0.0
+
+    def test_bandwidth_zero_at_threshold(self):
+        result = compute_maser_gain(_WANG_FC_HZ, q_m=1000.0, q_l=1000.0)
+        assert result.bandwidth_hz == pytest.approx(0.0, abs=1.0)
+
+    def test_bandwidth_zero_above_threshold(self):
+        result = compute_maser_gain(_WANG_FC_HZ, q_m=700.0, q_l=1000.0)
+        assert result.bandwidth_hz == pytest.approx(0.0, abs=1.0)
+
+    def test_bandwidth_formula_correct(self):
+        q_m, q_l = 1500.0, 1000.0
+        result = compute_maser_gain(_WANG_FC_HZ, q_m=q_m, q_l=q_l)
+        expected_bw = _WANG_FC_HZ * (q_m - q_l) / (q_l * q_m)
+        assert result.bandwidth_hz == pytest.approx(expected_bw, rel=1e-9)
+
+    def test_bandwidth_less_than_bare_cavity_linewidth(self):
+        """Parametric narrowing: B < f_c/Q_L (the bare cavity linewidth)."""
+        q_m, q_l = 1400.0, 1000.0
+        result = compute_maser_gain(_WANG_FC_HZ, q_m=q_m, q_l=q_l)
+        bare_cavity_bw = _WANG_FC_HZ / q_l
+        assert result.bandwidth_hz < bare_cavity_bw
+
+    def test_gain_increases_as_qm_approaches_ql(self):
+        """Gain should increase as Q_m approaches Q_L from above."""
+        q_l = 1000.0
+        r_far = compute_maser_gain(_WANG_FC_HZ, q_m=5000.0, q_l=q_l)
+        r_close = compute_maser_gain(_WANG_FC_HZ, q_m=1100.0, q_l=q_l)
+        assert r_close.gain_db > r_far.gain_db
+
+    def test_bandwidth_decreases_as_qm_approaches_ql(self):
+        """Parametric narrowing: bandwidth narrows as Q_m → Q_L."""
+        q_l = 1000.0
+        r_far = compute_maser_gain(_WANG_FC_HZ, q_m=5000.0, q_l=q_l)
+        r_close = compute_maser_gain(_WANG_FC_HZ, q_m=1100.0, q_l=q_l)
+        assert r_close.bandwidth_hz < r_far.bandwidth_hz
+
+    def test_gain_formula_critical_coupling(self):
+        """β=1: G = (Q_L/(Q_m-Q_L))² — verify against direct formula."""
+        q_l, q_m = 1000.0, 1200.0
+        result = compute_maser_gain(_WANG_FC_HZ, q_m=q_m, q_l=q_l, coupling_beta=1.0)
+        expected_g_power = (q_l / (q_m - q_l)) ** 2
+        expected_db = 10.0 * math.log10(expected_g_power)
+        assert result.gain_db == pytest.approx(expected_db, rel=1e-9)
+
+    def test_gain_bw_product_positive(self):
+        result = compute_maser_gain(_WANG_FC_HZ, q_m=1500.0, q_l=1000.0)
+        assert result.gain_bw_product_hz > 0.0
+
+    def test_wang_2024_gain_approx_14p5_db(self):
+        """Wang et al. (2024): peak gain ≈ 14.5 dB at self-consistent Q values."""
+        result = compute_maser_gain(
+            _WANG_FC_HZ, q_m=_WANG_QM, q_l=_WANG_QL, coupling_beta=_WANG_BETA
+        )
+        assert result.gain_db == pytest.approx(14.5, abs=0.5)
+
+    def test_wang_2024_bandwidth_approx_340_khz(self):
+        """Wang et al. (2024): bandwidth ≈ 340 kHz at self-consistent Q values."""
+        result = compute_maser_gain(
+            _WANG_FC_HZ, q_m=_WANG_QM, q_l=_WANG_QL, coupling_beta=_WANG_BETA
+        )
+        assert result.bandwidth_hz == pytest.approx(340_000.0, rel=0.05)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 10. Gain–bandwidth invariant
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestMaserGainBandwidthInvariant:
+    """The gain-voltage × bandwidth product equals f_c/Q_m for β=1."""
+
+    def test_gbp_equals_fc_over_qm_for_critical_coupling(self):
+        """√G × B = f_c/Q_m for β=1, validated at one operating point."""
+        q_l, q_m = 1000.0, 1200.0
+        result = compute_maser_gain(_WANG_FC_HZ, q_m=q_m, q_l=q_l, coupling_beta=1.0)
+        expected = _WANG_FC_HZ / q_m
+        assert result.gain_bw_product_hz == pytest.approx(expected, rel=1e-9)
+
+    def test_gbp_invariant_for_two_different_qm_critical_coupling(self):
+        """GBP = f_c/Q_m is the same for both Q_m values (β=1)."""
+        q_l = 1000.0
+        r1 = compute_maser_gain(_WANG_FC_HZ, q_m=1100.0, q_l=q_l, coupling_beta=1.0)
+        r2 = compute_maser_gain(_WANG_FC_HZ, q_m=5000.0, q_l=q_l, coupling_beta=1.0)
+        # Both equal f_c/Q_m (different Q_m ↔ different GBP)
+        assert r1.gain_bw_product_hz == pytest.approx(_WANG_FC_HZ / 1100.0, rel=1e-9)
+        assert r2.gain_bw_product_hz == pytest.approx(_WANG_FC_HZ / 5000.0, rel=1e-9)
+
+    def test_gbp_zero_above_threshold(self):
+        """GBP = 0 when not in amplifier regime."""
+        result = compute_maser_gain(_WANG_FC_HZ, q_m=500.0, q_l=1000.0, coupling_beta=1.0)
+        assert result.gain_bw_product_hz == pytest.approx(0.0, abs=1.0)
+
+    def test_wang_2024_gbp_equals_fc_over_qm(self):
+        """Wang 2024 exp. point: GBP = f_c/Q_m."""
+        result = compute_maser_gain(
+            _WANG_FC_HZ, q_m=_WANG_QM, q_l=_WANG_QL, coupling_beta=_WANG_BETA
+        )
+        expected = _WANG_FC_HZ / _WANG_QM
+        assert result.gain_bw_product_hz == pytest.approx(expected, rel=1e-9)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 11. MaserGainResult dataclass
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestMaserGainResult:
+    def test_result_is_frozen(self):
+        r = compute_maser_gain(_WANG_FC_HZ, q_m=1500.0, q_l=1000.0)
+        with pytest.raises((AttributeError, TypeError)):
+            r.gain_db = 0.0  # type: ignore[misc]
+
+    def test_all_float_fields_below_threshold(self):
+        r = compute_maser_gain(_WANG_FC_HZ, q_m=1500.0, q_l=1000.0)
+        assert isinstance(r.gain_db, float)
+        assert isinstance(r.bandwidth_hz, float)
+        assert isinstance(r.gain_bw_product_hz, float)
+        assert isinstance(r.margin_to_threshold, float)
+
+    def test_below_threshold_is_bool(self):
+        r = compute_maser_gain(_WANG_FC_HZ, q_m=1500.0, q_l=1000.0)
+        assert isinstance(r.below_threshold, bool)
+
+    def test_repr_includes_gain_db(self):
+        r = compute_maser_gain(_WANG_FC_HZ, q_m=1500.0, q_l=1000.0)
+        assert "gain_db" in repr(r)
+

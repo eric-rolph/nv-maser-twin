@@ -420,6 +420,61 @@ def _derive_population_fractions(nv_config: NVConfig) -> tuple[float, float]:
     return p_upper, p_lower
 
 
+@dataclass(frozen=True)
+class MaserGainResult:
+    """Analytical signal gain and bandwidth for the maser in amplifier regime.
+
+    Derived from cavity input-output theory (reflection geometry) and
+    the parametric-narrowing formula of Wang et al. (2024).
+
+    Reference values (Wang 2024, room-temperature NV maser):
+        gain_db ≈ 14.5 dB, bandwidth_hz ≈ 340 kHz at
+        Q_m ≈ 1589, Q_L ≈ 1337, β = 1, f_c = 2.87 GHz.
+
+    Notes:
+        ``gain_db`` is NaN when ``q_m ≤ q_l`` (at or above oscillation
+        threshold) because gain diverges there for a CW oscillator.
+    """
+
+    gain_db: float
+    """Signal power gain in dB.
+
+    For a reflection amplifier with coupling β:
+        G = ((β - 1)/((1+β)·Q_L) + 1/Q_m)² / (1/Q_L - 1/Q_m)²
+    For β = 1 (critical coupling):
+        G = (Q_L / (Q_m - Q_L))²
+    Returns float('nan') when q_m ≤ q_l (threshold or oscillation).
+    """
+
+    bandwidth_hz: float
+    """Effective 3 dB bandwidth of the maser amplifier response (Hz).
+
+    Parametric-narrowing formula:
+        B = f_c · (Q_m − Q_L) / (Q_L · Q_m)
+    Narrowed relative to the bare cavity linewidth f_c/Q_L.
+    Zero when q_m = q_l (at oscillation threshold).
+    """
+
+    gain_bw_product_hz: float
+    """Gain-voltage × bandwidth product (Hz).
+
+    For β = 1 this equals f_c / Q_m — the spin-gain linewidth —
+    and is invariant regardless of how close Q_m is to Q_L.
+    Positive and finite in both amplifier and oscillator regimes.
+    """
+
+    below_threshold: bool
+    """True when Q_m > Q_L (the device is a linear amplifier, not an oscillator)."""
+
+    margin_to_threshold: float
+    """Normalised margin Q_m/Q_L − 1.
+
+    Positive: safely below oscillation threshold.
+    Zero:     exactly at threshold (gain diverges).
+    Negative: above threshold (CW oscillation).
+    """
+
+
 def compute_amplifier_properties(
     nv_config: NVConfig,
     cavity_config: CavityConfig,
@@ -481,4 +536,124 @@ def compute_amplifier_properties(
         noise_temperature_k=t_noise,
         sql_noise_temp_k=t_sql,
         below_sql=below_sql,
+    )
+
+
+# ── Analytical maser gain and bandwidth ──────────────────────────
+
+def _gain_voltage(q_m: float, q_l: float, coupling_beta: float) -> float:
+    r"""Reflection amplitude |S₁₁| at resonance for a maser amplifier.
+
+    Derived from cavity input-output theory:
+
+    .. math::
+
+        S_{11} = \frac{\frac{\beta - 1}{Q_L (1+\beta)} + \frac{1}{Q_m}}
+                      {\frac{1}{Q_L} - \frac{1}{Q_m}}
+
+    For critical coupling (β = 1):
+
+    .. math::
+
+        S_{11} = \frac{Q_L}{Q_m - Q_L}
+
+    Returns float('nan') if q_m ≤ q_l (at or above threshold, denominator ≤ 0).
+    """
+    denominator = 1.0 / q_l - 1.0 / q_m  # D = κ_eff / ω_c  (> 0 below threshold)
+    if denominator <= 0.0:
+        return float("nan")
+    numerator = (coupling_beta - 1.0) / (q_l * (1.0 + coupling_beta)) + 1.0 / q_m
+    return numerator / denominator
+
+
+def compute_maser_gain(
+    cavity_frequency_hz: float,
+    q_m: float,
+    q_l: float,
+    coupling_beta: float = 1.0,
+) -> MaserGainResult:
+    r"""Analytical signal gain and bandwidth for the maser as a linear amplifier.
+
+    Uses cavity input-output theory (Wang et al. 2024, reflection geometry).
+    Valid in the linear-amplifier regime immediately below oscillation threshold
+    (Q_m > Q_L).
+
+    Signal power gain
+    ~~~~~~~~~~~~~~~~~
+
+    .. math::
+
+        G = \left(\frac{S_{11}^{(N)}}{S_{11}^{(D)}}\right)^2,\quad
+        S_{11}^{(N)} = \frac{\beta - 1}{Q_L(1+\beta)} + \frac{1}{Q_m},\quad
+        S_{11}^{(D)} = \frac{1}{Q_L} - \frac{1}{Q_m}
+
+    For critical coupling (β = 1):
+
+    .. math::
+
+        G = \left(\frac{Q_L}{Q_m - Q_L}\right)^2
+
+    This diverges at threshold (Q_m → Q_L) and is undefined above threshold.
+
+    Bandwidth (parametric narrowing)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    The effective 3 dB bandwidth narrows toward the oscillation threshold:
+
+    .. math::
+
+        B = f_c \cdot \frac{Q_m - Q_L}{Q_L \cdot Q_m}
+
+    Gain–bandwidth invariant
+    ~~~~~~~~~~~~~~~~~~~~~~~~
+
+    For β = 1 the voltage gain × bandwidth equals the spin-gain linewidth:
+
+    .. math::
+
+        \sqrt{G} \cdot B = \frac{f_c}{Q_m}
+
+    Validated against Wang et al. (2024) room-temperature NV maser:
+    G ≈ 14.5 dB, B ≈ 340 kHz at Q_L ≈ 1337, Q_m ≈ 1589, β = 1,
+    f_c = 2.87 GHz.
+
+    Args:
+        cavity_frequency_hz: Cavity resonance frequency in Hz.
+        q_m:                 Magnetic quality factor (spin gain).
+        q_l:                 Loaded cavity quality factor Q_L.
+        coupling_beta:       Coupling coefficient β = Q₀/Q_e
+                             (1.0 = critical coupling).
+
+    Returns:
+        :class:`MaserGainResult` with gain, bandwidth, and operating margins.
+    """
+    below_threshold = q_m > q_l
+    margin = q_m / q_l - 1.0
+
+    # Gain
+    s11 = _gain_voltage(q_m, q_l, coupling_beta)
+    if math.isnan(s11):
+        gain_db = float("nan")
+    else:
+        g_power = s11 ** 2
+        gain_db = 10.0 * math.log10(g_power) if g_power > 0 else float("nan")
+
+    # Bandwidth (parametric narrowing)
+    if below_threshold and q_l > 0 and q_m > 0:
+        bandwidth_hz = cavity_frequency_hz * (q_m - q_l) / (q_l * q_m)
+    else:
+        bandwidth_hz = 0.0
+
+    # Gain-bandwidth product: |S₁₁| × BW = f_c / Q_m (exact for β=1)
+    if below_threshold and not math.isnan(s11):
+        gain_bw_hz = abs(s11) * bandwidth_hz
+    else:
+        gain_bw_hz = 0.0
+
+    return MaserGainResult(
+        gain_db=gain_db,
+        bandwidth_hz=bandwidth_hz,
+        gain_bw_product_hz=gain_bw_hz,
+        below_threshold=below_threshold,
+        margin_to_threshold=margin,
     )

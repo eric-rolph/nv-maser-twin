@@ -24,6 +24,7 @@ from .cavity import (  # noqa: F401
     compute_n_effective,
     compute_full_threshold,
     compute_effective_q,
+    compute_spectral_overlap,
 )
 from .optical_pump import (  # noqa: F401
     PumpState,
@@ -224,6 +225,7 @@ from .spin_squeezing import (  # noqa: F401
 from .amplifier import (  # noqa: F401
     SIGMA_2,
     AmplifierProperties,
+    MaserGainResult,
     OutputPowerResult,
     compute_magnetic_q,
     compute_spin_temperature,
@@ -231,4 +233,5 @@ from .amplifier import (  # noqa: F401
     compute_sql_noise_temperature,
     compute_output_power,
     compute_amplifier_properties,
+    compute_maser_gain,
 )
