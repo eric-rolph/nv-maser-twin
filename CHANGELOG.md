@@ -6,6 +6,38 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added (SS15)
+
+- `physics/shielding.py` — Mu-metal magnetic shielding model (Risk R3 mitigation).
+  Implements `MuMetalShellConfig` (frozen dataclass: inner radius, wall thickness,
+  µ_r, shape, n_layers, interlayer gap, density), `ShieldingResult` (frozen dataclass:
+  attenuation_linear, attenuation_db, residual_field_tesla, incident_field_tesla,
+  shell_mass_kg, config), `compute_single_layer_attenuation()` (exact Jackson sphere
+  or Rikitake cylinder formula), `compute_multilayer_attenuation()` (product law for n
+  concentric shells), `compute_shell_mass_kg()` (sphere/cylinder volume formulas,
+  including end-caps), `compute_shielding()` (primary entry point returning
+  ShieldingResult), and `find_thickness_for_target_db()` (bisection sizing utility).
+  Default parameters (15 mm inner radius, 1 mm wall, µ_r = 50 000, spherical, 1 layer)
+  give ≈ 65.8 dB attenuation, reducing a 30 mT stray field to ~15 nT — exceeding the
+  architecture §6.5 target of ≥ 50 dB.  Minimum thickness for 50 dB is ≈ 0.14 mm.
+  All 7 symbols exported from `nv_maser.physics`.
+- `docs/adr/ADR-019-mu-metal-shielding-model.md` — Full architecture decision record:
+  physics background (Jackson §5.12 spherical formula, Rikitake cylindrical formula),
+  benchmark values table, 3 alternatives considered (scalar function, FEA, encode in
+  disturbance config), validity of product approximation for multi-layer shells,
+  end-cap treatment, frequency-dependence note, chain usage example.
+
+### Tests (SS15)
+
+- `tests/test_shielding.py` — 39 tests across 7 classes:
+  `TestMuMetalShellConfig` (4), `TestComputeSingleLayerAttenuation` (10),
+  `TestComputeMultilayerAttenuation` (5), `TestComputeShellMassKg` (6),
+  `TestComputeShielding` (7), `TestFindThicknessForTargetDb` (6),
+  `TestPublicAPI` (1).  Key assertions: µ_r = 1 → S = 1 exactly; sphere > cylinder
+  for equal dimensions; architecture 50 dB target exceeded; 30 mT stray → < 100 µT
+  residual; bisection achieves target within ±0.1 dB; `ValueError` on invalid bracket.
+  Suite total: **1849 passed, 75 skipped, 10 warnings**.
+
 ### Added (SS14)
 
 - `physics/gain_lock.py` — Gain-lock PI control loop for maser threshold

@@ -363,3 +363,12 @@ from .probe import (  # noqa: F401
     sweep_stray_field_vs_separation,
     sweep_depth_resolution_vs_bandwidth,
 )
+from .shielding import (  # noqa: F401
+    MuMetalShellConfig,
+    ShieldingResult,
+    compute_single_layer_attenuation,
+    compute_multilayer_attenuation,
+    compute_shell_mass_kg,
+    compute_shielding,
+    find_thickness_for_target_db,
+)
