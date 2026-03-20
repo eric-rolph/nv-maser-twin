@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added (SS14)
+
+- `physics/gain_lock.py` — Gain-lock PI control loop for maser threshold
+  stabilisation (Risk R10 mitigation).  Implements `GainLockConfig` (frozen
+  dataclass with K_p, K_i, setpoint, power bounds, noise sigma), `GainLockStep`
+  (per-step snapshot), `GainLockResult` (simulation summary with lock time),
+  `compute_cooperativity()` (maps laser power → ensemble C via optical pump
+  saturation and `compute_full_threshold()`), `find_threshold_pump_power()`
+  (bisection for C = 1), and `run_gain_lock_simulation()` (N-step PI loop with
+  optional noise injection and reproducible RNG).  All 6 symbols exported from
+  `nv_maser.physics`.  Default gains (K_p = 0.001 W/C, K_i = 1.0 W·s⁻¹/C)
+  chosen for stability: loop gain K_p × dC/dP ≈ 0.26 < 1 near threshold.
+- `docs/adr/ADR-018-gain-lock-pi-control-loop.md` — Full architecture decision
+  record: physics background, PI stability analysis, 3 alternatives considered
+  (output-power PI, frequency-tracking PLL, Q-boost inner loop), linearised
+  gain derivation, integral windup discussion, code example.
+
 ### Added
 
 - `rl/__init__.py` — public API exports for the RL sub-package:
@@ -42,6 +59,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Tests
 
+- 39 new tests in `tests/test_gain_lock.py`
+  (`TestGainLockConfig` × 3, `TestGainLockStep` × 3,
+  `TestComputeCooperativity` × 8, `TestFindThresholdPumpPower` × 5,
+  `TestRunGainLockSimulation` × 14, `TestGainLockResult` × 3,
+  `TestPublicAPI` × 1). Total suite: 1810 passed, 75 skipped, 10 warnings.
 - 17 new tests in `tests/test_single_sided_magnet.py`
   (`TestMilestoneResult` × 5, `TestValidateSweetSpotMilestone` × 12).
 - 37 new tests in `tests/test_probe_env.py` covering

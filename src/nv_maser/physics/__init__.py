@@ -262,6 +262,14 @@ from .maser_gain_frequency import (  # noqa: F401
     compute_saturation_power,
     gain_curve_from_mb_result,
 )
+from .gain_lock import (  # noqa: F401
+    GainLockConfig,
+    GainLockStep,
+    GainLockResult,
+    compute_cooperativity,
+    find_threshold_pump_power,
+    run_gain_lock_simulation,
+)
 from .pulse_sequence import (  # noqa: F401
     SpinEchoResult,
     CPMGResult,
