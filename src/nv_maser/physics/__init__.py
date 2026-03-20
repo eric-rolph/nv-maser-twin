@@ -372,3 +372,12 @@ from .shielding import (  # noqa: F401
     compute_shielding,
     find_thickness_for_target_db,
 )
+from .gain_bandwidth_match import (  # noqa: F401
+    GainBandwidthConfig,
+    BandwidthMatchResult,
+    compute_maser_gain_bandwidth,
+    compute_b0_drift_tolerance,
+    compute_bandwidth_match,
+    sweep_q_vs_gain_bandwidth,
+    sweep_b0_drift_vs_overlap,
+)

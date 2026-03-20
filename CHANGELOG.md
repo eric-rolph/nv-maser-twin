@@ -6,6 +6,42 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added (SS16)
+
+- `physics/gain_bandwidth_match.py` — Maser gain-bandwidth vs NMR readout
+  matching model (Risk R2 mitigation).  Implements `GainBandwidthConfig`
+  (frozen dataclass: cavity_q = 30 000, f0_hz = 1.4699 GHz, readout_bw_hz =
+  20 kHz, b0_tesla = 50 mT, gyro_ratio_hz_t = 42.577 MHz/T),
+  `BandwidthMatchResult` (frozen dataclass: maser_gain_bw_hz,
+  readout_bw_hz, frequency_margin_hz, overlap_fraction,
+  b0_drift_tolerance_t, b0_drift_tolerance_ppm, passes_criterion),
+  `compute_maser_gain_bandwidth()` (BW = f₀/Q), `compute_b0_drift_tolerance()`
+  (returns max B₀ drift before Larmor exits gain margin, as (T, ppm) tuple),
+  `compute_bandwidth_match()` (primary entry point returning
+  BandwidthMatchResult), `sweep_q_vs_gain_bandwidth()` (Q-sweep utility),
+  and `sweep_b0_drift_vs_overlap()` (B₀-drift vs. overlap-fraction sweep).
+  Nominal benchmark: BW_maser ≈ 49 kHz, one-sided margin ≈ 14.5 kHz,
+  B₀ drift tolerance ≈ 340 µT / 6 810 ppm — far exceeding the 10 ppm
+  B₀ stability required for NMR image resolution, quantitatively closing R2
+  by design.  All 7 symbols exported from `nv_maser.physics`.
+- `docs/adr/ADR-020-gain-bandwidth-match-model.md` — Architecture decision
+  record: Lorentzian gain model, loaded-Q vs unloaded-Q note, benchmark table,
+  key finding (R2 mitigated by design margin), positive / watch-point
+  consequences, 3 alternatives considered.
+
+### Tests (SS16)
+
+- `tests/test_gain_bandwidth_match.py` — 40 tests across 7 classes:
+  `TestGainBandwidthConfig` (4), `TestComputeMaserGainBandwidth` (8),
+  `TestComputeB0DriftTolerance` (6), `TestComputeBandwidthMatch` (10),
+  `TestSweepQVsGainBandwidth` (5), `TestSweepB0DriftVsOverlap` (6),
+  `TestPublicAPI` (1).  Key assertions: BW = f₀/Q exactly; ValueError on
+  non-positive Q or f₀; BW inversely proportional to Q; drift tolerance zero
+  when readout exceeds gain BW; overlap fraction in [0, 1]; drift tolerance
+  ≫ 100 ppm at nominal; zero-drift overlap matches static result; large drift
+  clips to 0; monotone sweep behaviours; symmetry under sign of drift.
+  Suite total: **1889 passed, 75 skipped, 10 warnings**.
+
 ### Added (SS15)
 
 - `physics/shielding.py` — Mu-metal magnetic shielding model (Risk R3 mitigation).
