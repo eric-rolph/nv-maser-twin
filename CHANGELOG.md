@@ -6,6 +6,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added (SS23)
+
+- `physics/phase6_validator.py` — Phase-6 '2D image' milestone validator;
+  formally validates architecture §12.2 criterion "Grid phantom resolved at
+  3 mm".  Implements `Phase6Config` (frozen dataclass: `bar_width_mm=3.0`,
+  `fov_m=0.064`, `grid_size=64`, `n_spokes=64`, `n_readout=64`,
+  `kernel_width=3.0`, `bar_contrast_threshold=0.2`,
+  `image_snr_threshold_db=5.0`, `resolution_threshold_mm=3.0`),
+  `GridPhantomResult` (frozen: `phantom`, `pixel_size_mm`, `n_bar_pairs`,
+  `bar_width_mm`), `BarContrastResult` (frozen: `bar_mean`, `gap_mean`,
+  `michelson_contrast`, `passes`), `Phase6MilestoneResult` (frozen: `config`,
+  `phantom_result`, `recon`, `psf_fwhm_mm`, `bar_contrast`, `image_snr_db`,
+  `pixel_size_mm`, `psf_pass`, `contrast_pass`, `snr_pass`,
+  `phase6_milestone_closed`).  Helpers: `_make_bar_phantom`,
+  `_reconstruct_from_phantom`, `_measure_psf_fwhm`, `_measure_bar_contrast`.
+  Top-level: `validate_phase6_milestone`.  Forward model reuses
+  `_noncartesian_dft` from `artifact_characterizer.py` (same validated path
+  as R8 risk closure).  Default outcome (FOV=6.4 cm, 64×64, 3 mm bars,
+  1.0 mm pixel): PSF FWHM ≈ 1.79 mm (< 3.0 mm ✓), Michelson contrast ≈ 0.32
+  (> 0.2 ✓), image SNR ≈ 65 dB (> 5 dB ✓) — `phase6_milestone_closed=True`.
+  ADR: `docs/adr/ADR-027-phase6-2d-image-milestone.md`.
+  Tests: `tests/test_phase6_validator.py` (81 tests).
+
 ### Added (SS22)
 
 - `physics/phase4_validator.py` — Phase-4 depth-profile milestone validator;

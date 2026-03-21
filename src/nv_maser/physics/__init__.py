@@ -441,3 +441,10 @@ from .phase4_validator import (  # noqa: F401
     compute_layer_contrast,
     validate_phase4_milestone,
 )
+from .phase6_validator import (  # noqa: F401
+    Phase6Config,
+    GridPhantomResult,
+    BarContrastResult,
+    Phase6MilestoneResult,
+    validate_phase6_milestone,
+)
