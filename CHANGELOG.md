@@ -6,6 +6,66 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added (SS19)
+
+- `physics/depth_limit_calculator.py` — Scan-time-gated depth-limit model
+  (Risk R7 — SNR insufficient at depth).  Implements `DepthLimitConfig`
+  (frozen dataclass: `target_snr=5.0`, `scan_time_budget_s=120.0`,
+  `voxel_size_mm=3.0`, `tr_ms=100.0`, `te_ms=10.0`, `sequence="spin_echo"`,
+  `bandwidth_hz=10_000.0`, `depth_step_mm=1.0`, range [1, 30] mm; validated
+  in `__post_init__`), `DepthPoint` (frozen dataclass: `depth_mm`,
+  `snr_per_shot`, `required_averages`, `scan_time_s`, `within_budget`),
+  `DepthLimitResult` (frozen dataclass: `depth_profile`, `max_depth_mm`,
+  `n_depths_evaluated`, `scan_time_budget_s`, `target_snr`,
+  `snr_per_shot_at_limit`, `required_averages_at_limit`,
+  `scan_time_at_limit_s`, `any_feasible`, `v1_depth_range_confirmed`,
+  `snr_per_shot_at_5mm/10mm/15mm`), `compute_depth_point()` (calls
+  `compute_snr_budget(n_averages=1)` then applies
+  `required_averages = ceil((target_snr / snr_per_shot)²)` and
+  `scan_time_s = required_averages × TR_ms / 1000`), and
+  `compute_depth_limit()` (sweeps depth range with integer-step indexing,
+  identifies deepest feasible depth, sets `v1_depth_range_confirmed = True`
+  iff all depths in [5, 15] mm are within the scan-time budget).
+  Architecture context: single-shot SNR at 20 mm ≈ 10⁻⁶ (coil-noise
+  dominated at 300 K); maser advantage ~1 dB; V1 design intent 5–15 mm.
+  All 5 public symbols exported from `nv_maser.physics`.
+- `docs/adr/ADR-023-depth-limit-snr-budget-analysis.md` — Architecture
+  decision record: scan-time-budget approach to characterise R7 depth
+  limitation; validates V1 5–15 mm operating range; 3 alternatives
+  considered (SNR contour plot, budget parameter on existing function,
+  analytical inversion — all rejected); R7 status closed.
+
+### Tests (SS19)
+
+- `tests/test_depth_limit_calculator.py` — 48 tests across 11 classes:
+  `TestDepthLimitConfigDefaults` (11): all 10 default field values verified,
+  frozen check; `TestDepthLimitConfigValidation` (10): `__post_init__` raises
+  `ValueError` for negative/zero `target_snr`, `scan_time_budget_s`,
+  `voxel_size_mm`, `tr_ms`, `depth_step_mm`, and `min_depth_mm ≥ max_depth_mm`;
+  `TestDepthPointFields` (6): field presence and frozen property;
+  `TestComputeDepthPoint` (10): returns `DepthPoint`, depth echoed, SNR > 0,
+  averages ≥ 1, `scan_time_s = averages × TR`, `within_budget` flag correct
+  for large/tiny budgets, consistency check, deeper requires more averages;
+  `TestComputeDepthLimit` (15): returns `DepthLimitResult`, sweep length,
+  profile length matches, depths increasing, max_depth is feasible, max_depth
+  is largest feasible, `any_feasible` with large/tiny budget, `max_depth=0`
+  when infeasible, budget/target echoed, `None` config uses defaults, frozen
+  result, `scan_time_at_limit ≤ budget`, first/last profile depths equal
+  min/max; `TestDepthSNRMonotonicity` (5): per-shot SNR strictly decreasing,
+  required_averages non-decreasing, scan_time non-decreasing, all SNR > 0,
+  infeasibility propagates monotonically; `TestScanTimeBudgetSensitivity` (3):
+  larger budget → deeper or equal max_depth, smaller budget → shallower,
+  scan_time_at_limit ≤ budget for 3 representative budgets;
+  `TestTargetSNRSensitivity` (4): higher target → shallower or equal,
+  lower target → deeper or equal, target echoed, required averages increase
+  with target; `TestV1RangeConfirmation` (4): confirmed with enormous budget,
+  not confirmed with microscopic budget, consistent with per-point profile,
+  correct when 15 mm is outside evaluated range; `TestReferenceDepths` (7):
+  5/10/15 mm SNR present in default profile, 5 mm > 10 mm > 15 mm ordering,
+  values match depth profile, None when depth not in profile;
+  `TestArchitectureValidation` (3): per-shot SNR < 1 at all depths ≥ 5 mm,
+  required averages at 20 mm >> at 10 mm, default profile has 30 points.
+
 ### Added (SS18)
 
 - `physics/mixer_nonlinearity.py` — Mixer IMD3 intermodulation distortion model

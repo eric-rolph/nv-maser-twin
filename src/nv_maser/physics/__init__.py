@@ -402,3 +402,10 @@ from .mixer_nonlinearity import (  # noqa: F401
     compute_imd3_pair,
     compute_mixer_nonlinearity,
 )
+from .depth_limit_calculator import (  # noqa: F401
+    DepthLimitConfig,
+    DepthPoint,
+    DepthLimitResult,
+    compute_depth_point,
+    compute_depth_limit,
+)
