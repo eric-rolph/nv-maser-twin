@@ -391,3 +391,14 @@ from .rf_rejection import (  # noqa: F401
     compute_interferer_rejection,
     compute_rf_rejection,
 )
+from .mixer_nonlinearity import (  # noqa: F401
+    IMD3Product,
+    MixerNonlinearityConfig,
+    MixerNonlinearityResult,
+    PRODUCT_2F1_MINUS_F2,
+    PRODUCT_2F2_MINUS_F1,
+    compute_imd3_power_dbm,
+    compute_imd3_frequency_hz,
+    compute_imd3_pair,
+    compute_mixer_nonlinearity,
+)

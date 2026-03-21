@@ -6,6 +6,57 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added (SS18)
+
+- `physics/mixer_nonlinearity.py` — Mixer IMD3 intermodulation distortion model
+  (Risk R9 — nonlinear component).  Implements `IMD3Product` (frozen dataclass:
+  interferer_1, interferer_2, product_type, product_freq_hz, is_physical,
+  product_power_dbm, freq_offset_from_maser_hz, in_maser_band),
+  `MixerNonlinearityConfig` (frozen dataclass: iip3_dbm = 5.0 dBm, maser_center_hz
+  = 1.4699 GHz, maser_gain_bw_hz = 49 000 Hz, interferers = default 8-source
+  hospital set), `MixerNonlinearityResult` (frozen dataclass: imd3_products,
+  n_pairs_evaluated, n_products_evaluated, any_in_band, worst_in_band_power_dbm,
+  in_band_products, max_imd3_power_dbm), `compute_imd3_power_dbm()` (two-tone
+  formula: 2f₁−f₂ → 2P₁+P₂−2·IIP3; 2f₂−f₁ → P₁+2P₂−2·IIP3, all dBm),
+  `compute_imd3_frequency_hz()` (exact frequency of each product), `compute_imd3_pair()`
+  (evaluates both products for one interferer pair), and `compute_mixer_nonlinearity()`
+  (top-level aggregator over all C(N,2) pairs).  Default config: 8 hospital-environment
+  interferers, IIP3 = 5.0 dBm (matches `DEFAULT_MIXER.ip3_dbm` in `up_conversion.py`).
+  Benchmark: 28 unordered pairs × 2 products = 56 IMD3 products evaluated; all 56
+  fall > 75 MHz outside the 49 kHz maser gain window (`any_in_band = False`), closing
+  R9 nonlinear distortion for the default hospital environment.  All 9 public symbols
+  exported from `nv_maser.physics`.
+- `docs/adr/ADR-022-mixer-imd3-nonlinearity-model.md` — Architecture decision
+  record: two-tone IMD3 model for mixer R9 nonlinear distortion; validation table (56
+  products, 0 in-band); distinguishes IMD3 mechanism from single-tone Lorentzian
+  rejection (ADR-021); 3 alternatives considered (hardware pre-filter deferred,
+  high-IIP3 mixer available as mitigation, OIP3-only bound rejected for inability
+  to identify in-band products).
+
+### Tests (SS18)
+
+- `tests/test_mixer_nonlinearity.py` — 52 tests across 8 classes:
+  `TestComputeImd3PowerDbm` (8): equal-tone reduces to 3P−2·IIP3, unequal tones both
+  product types, stronger input raises power, higher IIP3 lowers power, 2:1 dominant-tone
+  slope, 1:1 secondary-tone slope, bad product_type raises;
+  `TestComputeImd3FrequencyHz` (6): exact formulas for both product types, equal
+  frequencies, negative-frequency algebraically allowed, bad product_type raises,
+  default product type;
+  `TestComputeImd3Pair` (9): two products returned, type tags, interferer ordering,
+  non-positive frequency is_physical=False, non-physical not in-band, exact in-band
+  hit, out-of-band pair, freq_offset magnitude, power matches formula;
+  `TestMixerNonlinearityConfig` (7): defaults, non-positive center/bw raises, custom
+  interferers;
+  `TestComputeMixerNonlinearityDefault` (9): type, n_pairs=28, n_products=56, no
+  in-band products, worst=-inf, empty in-band tuple, finite max power, None config
+  uses default, stronger dominant raises max;
+  `TestComputeMixerNonlinearityInBand` (5): constructed near-maser pair flags in-band,
+  non-empty in-band products, finite worst power, worst≤max, worst equals max-of-in-band;
+  `TestTopologyPairCounting` (4): N=1/2/3 topology, no duplicate pairs;
+  `TestImd3ProductFieldConsistency` (2): type tag matches frequency formula, power
+  roundtrips with formula.
+  Suite total: **1996 passed, 75 skipped, 10 warnings**.
+
 ### Added (SS17)
 
 - `physics/rf_rejection.py` — RF interference rejection model (Risk R6 mitigation).
