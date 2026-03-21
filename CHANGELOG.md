@@ -6,6 +6,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added (SS25)
+
+- `physics/phase1_validator.py` — Phase-1 'maser oscillation' milestone
+  validator; formally validates architecture §12.2 criterion "Detectable
+  stimulated emission at 1.47 GHz".  Completes the full set of six §12.2
+  milestone validators (Maser oscillation, Sweet-spot, Depth profile, 2D
+  image, Tissue contrast).  Implements `Phase1Config` (frozen dataclass:
+  `target_frequency_ghz=1.47`, `frequency_tolerance_mhz=50.0`,
+  `min_output_power_dbm=-100.0`, `gain_budget=0.5`),
+  `OscillationThresholdResult` (frozen: `magnetic_q`, `loaded_q`, `q_ratio`,
+  `above_threshold_wang`, `cooperativity`, `threshold_margin`, `masing`,
+  `spin_temperature_k`), `Phase1MilestoneResult` (frozen: `oscillation`,
+  `frequency_ghz`, `target_frequency_ghz`, `frequency_deviation_mhz`,
+  `frequency_tolerance_mhz`, `output_power_w`, `output_power_dbm`,
+  `min_output_power_dbm`, `threshold_met`, `frequency_met`, `power_met`,
+  `phase1_milestone_closed`, `closing_message`).  Top-level:
+  `validate_phase1_milestone`.  Three criteria: (1) oscillation threshold
+  assessed via *two* independent frameworks — Wang 2024 magnetic-Q
+  (Q_m/Q_L ≈ 0.779 < 1) and Breeze cooperativity (C ≈ 2.57 > 1); (2)
+  cavity frequency within ±50 MHz of 1.47 GHz; (3) CW output power ≥
+  −100 dBm (default ≈ −69.5 dBm).  All three pass by default →
+  `phase1_milestone_closed=True`.
+  ADR: `docs/adr/ADR-029-phase1-maser-oscillation-milestone.md`.
+  Tests: `tests/test_phase1_validator.py` (69 tests).
+
 ### Added (SS24)
 
 - `physics/phase9_validator.py` — Phase-9 'tissue contrast' milestone
