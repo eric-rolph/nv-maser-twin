@@ -6,6 +6,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added (SS20)
+
+- `physics/field_tolerance_calculator.py` — B₀ field strength and homogeneity
+  tolerance model (Risk R1 — sweet-spot magnet field too weak, **confirmed
+  closed**).  Implements `FieldToleranceConfig` (frozen dataclass: `b0_nominal_t=0.050`,
+  `b0_sweep_min_t=0.030`, `b0_sweep_max_t=0.070`, `n_b0_sweep=21`,
+  `uniformity_sweep_min_ppm=10`, `uniformity_sweep_max_ppm=5000`,
+  `n_uniformity_sweep=20`, `te_fid_us=100`, `t2_tissue_ms=50`,
+  `maser_bandwidth_hz=49000`, `v1_b0_tolerance_t=0.005`,
+  `v1_uniformity_ppm=500`), `B0SensitivityPoint` (frozen: `b0_tesla`, `b0_mT`,
+  `b0_deviation_pct`, `polarization_factor`, `signal_frequency_factor`,
+  `snr_factor`, `snr_loss_db`, `larmor_frequency_hz`), `HomogeneityPoint`
+  (frozen: `uniformity_ppm`, `delta_b0_mt`, `delta_frequency_hz`,
+  `t2star_inhom_ms`, `t2star_eff_ms`, `snr_loss_fid_factor`,
+  `snr_loss_fid_db`, `within_maser_bandwidth`), `FieldToleranceResult` (frozen:
+  both sweep tuples, `b0_3db_loss_t`, `b0_1db_loss_t`,
+  `uniformity_3db_fid_loss_ppm`, `uniformity_1db_fid_loss_ppm`,
+  `uniformity_maser_limit_ppm`, `v1_snr_loss_at_b0_min_db`,
+  `v1_spectral_bandwidth_at_spec_hz`, `v1_maser_bandwidth_margin_hz`,
+  `r1_risk_closed`).  Functions: `compute_b0_sensitivity_point`,
+  `compute_homogeneity_point`, `sweep_b0_sensitivity`, `sweep_homogeneity`,
+  `compute_field_tolerance`.  R1 closure: worst-case SNR loss at 45 mT is
+  1.84 dB (< 3 dB); 500 ppm spectral bandwidth ≈ 1 064 Hz vs 24 500 Hz maser
+  half-BW (23× margin); `r1_risk_closed = True` with default config.
+- ADR-024: documents the B₀ sensitivity (SNR ∝ B₀²), FID T2* dephasing,
+  spectral-bandwidth model, and R1 closure rationale.
+- `tests/test_field_tolerance_calculator.py` — 52 tests (T01–T52).
+- **Test count**: 2127 passed (baseline SS19: 2075).
+
 ### Added (SS19)
 
 - `physics/depth_limit_calculator.py` — Scan-time-gated depth-limit model
