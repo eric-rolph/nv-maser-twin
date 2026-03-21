@@ -6,6 +6,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added (SS21)
+
+- `physics/artifact_characterizer.py` — Reconstruction artifact characterisation
+  model (Risk R8 — reconstruction artifacts from non-Cartesian k-space,
+  **confirmed closed**).  Implements `ArtifactConfig` (frozen dataclass:
+  `grid_size=64`, `fov_m=0.08`, `kernel_width=3.0`, `trajectory="radial"`,
+  `n_spokes=64`, `n_readout=64`, `v1_asr_threshold=0.05`,
+  `v1_overshoot_frac=0.09`, `v1_psf_fwhm_ratio=3.0`), `PSFResult` (frozen:
+  `fwhm_x_mm`, `fwhm_y_mm`, `ideal_fwhm_mm`, `fwhm_ratio`, `peak_value`,
+  `within_spec`), `AliasingResult` (frozen: `asr`, `asr_db`, `within_spec`),
+  `RingingResult` (frozen: `overshoot_fraction`, `undershoot_fraction`,
+  `within_spec`), `ArtifactResult` (frozen: all three sub-results plus
+  `pixel_size_mm`, `trajectory_n_samples`, `cartesian_reference_snr_db`,
+  `gridding_snr_db`, `snr_loss_gridding_db`, `r8_risk_closed`).  Functions:
+  `generate_radial_trajectory`, `generate_spiral_trajectory`, `make_phantom`,
+  `compute_psf`, `compute_aliasing`, `compute_ringing`,
+  `compute_artifact_characterization`.  Uses an exact non-Cartesian DFT
+  (`_noncartesian_dft`, O(M × Ny × Nx), pure NumPy) as the forward model.
+  R8 closure: default 64 × 64 radial config gives PSF FWHM ratio 1.79×
+  (< 3.0 threshold), aliasing ASR 0.48 % (< 5 %), Gibbs overshoot 1.58 %
+  (< 9 %) — all V1 thresholds met; `r8_risk_closed = True`.
+  ADR: `docs/adr/ADR-025-reconstruction-artifact-characterisation.md`.
+  Tests: `tests/test_artifact_characterizer.py` (59 tests).
+
 ### Added (SS20)
 
 - `physics/field_tolerance_calculator.py` — B₀ field strength and homogeneity
