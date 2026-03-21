@@ -448,3 +448,9 @@ from .phase6_validator import (  # noqa: F401
     Phase6MilestoneResult,
     validate_phase6_milestone,
 )
+from .phase9_validator import (  # noqa: F401
+    Phase9Config,
+    T2ContrastResult,
+    Phase9MilestoneResult,
+    validate_phase9_milestone,
+)

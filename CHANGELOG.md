@@ -6,6 +6,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added (SS24)
+
+- `physics/phase9_validator.py` — Phase-9 'tissue contrast' milestone
+  validator; formally validates architecture §12.2 criterion "T2 difference
+  visible between fat and muscle".  Implements `Phase9Config` (frozen
+  dataclass: `te_short_ms=10.0`, `te_long_ms=80.0`,
+  `t2_contrast_ratio_threshold=1.5`, `snr_threshold=3.0`,
+  `scan_time_limit_s=120.0`, `fat_center_depth_mm=4.5`,
+  `muscle_center_depth_mm=10.0`), `T2ContrastResult` (frozen: `fat_depth_mm`,
+  `muscle_depth_mm`, `fat_signal_short`, `muscle_signal_short`,
+  `fat_signal_long`, `muscle_signal_long`, `t2_contrast_ratio`, `passes`),
+  `Phase9MilestoneResult` (frozen: `config`, `profile_short`, `profile_long`,
+  `t2_contrast`, `fat_snr`, `muscle_snr`, `contrast_pass`, `snr_pass`,
+  `scan_time_s`, `scan_time_pass`, `phase9_milestone_closed`).  Top-level:
+  `validate_phase9_milestone`.  Design: SNR criterion evaluated at short TE
+  (10 ms, both tissues bright); T2 contrast ratio evaluated at long TE
+  (80 ms, fat/muscle ≈ 19×) so the depth-dependent coil-sensitivity is
+  cancelled.  Default outcome on FOREARM_LAYERS phantom: T2 contrast ratio
+  ≈ 19× (> 1.5× ✓), fat SNR ≈ 20.3 (> 3.0 ✓), muscle SNR ≈ 3.3 (> 3.0 ✓),
+  scan time ≈ 102 s (< 120 s ✓) — `phase9_milestone_closed=True`.
+  ADR: `docs/adr/ADR-028-phase9-tissue-contrast-milestone.md`.
+  Tests: `tests/test_phase9_validator.py` (67 tests).
+
 ### Added (SS23)
 
 - `physics/phase6_validator.py` — Phase-6 '2D image' milestone validator;
