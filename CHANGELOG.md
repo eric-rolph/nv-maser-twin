@@ -6,6 +6,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added (SS26)
+
+- `tests/test_main.py` — CLI entry-point unit tests; lifts `main.py` from
+  0 % to **94 % branch coverage** (7 non-testable lines remain: `cmd_demo`
+  GUI body + `__main__` guard).  49 tests across 10 classes:
+  `TestDeepMergeConfig` (8 — pure-function tests for `_deep_merge_config`
+  including flat/nested overrides and immutability), `TestMainDispatch` (6 —
+  argparse routing for `train`, `evaluate`, `visualize-coils`, `dataset`,
+  `export`, `serve`), `TestMainConfigOverrides` (5 — `--device`, `--arch`,
+  `--epochs`, `--samples` flag application), `TestMainYAMLConfig` (4 —
+  valid flat/nested YAML overrides and Pydantic `ValidationError → SystemExit(1)`
+  path), `TestCmdTrain` (3 — Trainer construction, `train()` call,
+  `plot_training_history` call), `TestCmdEvaluate` (4 — `load_best` /
+  `eval` calls, `generate_training_data(500)`, stdout output verification
+  with real tiny torch tensors 500 × 4 × 4), `TestCmdDataset` (6 —
+  `build_dataset` call, `num_samples` precedence logic, `force_rebuild`,
+  stdout), `TestCmdExport` (5 — `export_model` dispatch, custom
+  `output_path/checkpoint/opset`), `TestCmdServe` (3 — `uvicorn.run`
+  call with default and custom host/port), `TestCmdVisualizeCoils` (5 —
+  `FieldEnvironment`, `plot_coil_influence`, `plot_disturbance_spectrum`,
+  `plt.show`, `disturbance_gen.generate`).
+  ADR: `docs/adr/ADR-030-main-cli-coverage.md`.
+  Tests: `tests/test_main.py` (49 tests).
+
 ### Added (SS25)
 
 - `physics/phase1_validator.py` — Phase-1 'maser oscillation' milestone
