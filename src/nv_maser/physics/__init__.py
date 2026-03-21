@@ -434,3 +434,10 @@ from .artifact_characterizer import (  # noqa: F401
     compute_ringing,
     compute_artifact_characterization,
 )
+from .phase4_validator import (  # noqa: F401
+    Phase4Config,
+    LayerContrastResult,
+    Phase4MilestoneResult,
+    compute_layer_contrast,
+    validate_phase4_milestone,
+)

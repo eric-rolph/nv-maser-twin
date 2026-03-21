@@ -6,6 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added (SS22)
+
+- `physics/phase4_validator.py` — Phase-4 depth-profile milestone validator;
+  formally validates architecture §12.2 criteria "First NMR signal" and
+  "Resolvable layers in layered phantom".  Implements `Phase4Config` (frozen
+  dataclass: `signal_snr_threshold=3.0`, `contrast_ratio_threshold=1.5`,
+  `snr_at_boundary_threshold=1.0`, `scan_time_limit_s=120.0`,
+  `depth_range_mm=(3.0, 15.0)`), `LayerContrastResult` (frozen: `layer_a_name`,
+  `layer_b_name`, `t2_a_ms`, `t2_b_ms`, `t2_contrast_ratio`,
+  `boundary_depth_mm`, `snr_at_boundary`, `in_depth_range`, `detectable`),
+  `Phase4MilestoneResult` (frozen: `depth_profile`, `layer_contrasts`,
+  `n_depths_evaluated`, `max_snr_in_range`, `min_snr_in_range`, `scan_time_s`,
+  `all_in_range_layers_detectable`, `snr_pass`, `scan_time_pass`,
+  `phase4_milestone_closed`).  Functions: `compute_layer_contrast`,
+  `validate_phase4_milestone`.  Default outcome on FOREARM_LAYERS phantom:
+  `phase4_milestone_closed=True` — fat→muscle boundary at 7 mm T2 ratio 2.29
+  (> 1.5 ✓), SNR at boundary 16.44 (> 1.0 ✓), max SNR in range 20.75
+  (> 3.0 ✓), scan_time 102.4 s (< 120 ✓).  ADR:
+  `docs/adr/ADR-026-phase4-depth-profile-milestone.md`.
+  Tests: `tests/test_phase4_validator.py` (71 tests).
+
 ### Added (SS21)
 
 - `physics/artifact_characterizer.py` — Reconstruction artifact characterisation
