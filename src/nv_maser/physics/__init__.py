@@ -381,3 +381,13 @@ from .gain_bandwidth_match import (  # noqa: F401
     sweep_q_vs_gain_bandwidth,
     sweep_b0_drift_vs_overlap,
 )
+from .rf_rejection import (  # noqa: F401
+    InterfererSpec,
+    RFRejectionConfig,
+    InterfererResult,
+    RFRejectionResult,
+    compute_lorentzian_attenuation,
+    compute_fractional_bandwidth,
+    compute_interferer_rejection,
+    compute_rf_rejection,
+)

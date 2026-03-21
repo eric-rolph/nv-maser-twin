@@ -6,6 +6,49 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added (SS17)
+
+- `physics/rf_rejection.py` — RF interference rejection model (Risk R6 mitigation).
+  Implements `InterfererSpec` (frozen dataclass: name, center_freq_hz, bandwidth_hz,
+  power_dbm), `RFRejectionConfig` (frozen dataclass: maser_center_hz = 1.4699 GHz,
+  maser_gain_bw_hz = 49 000 Hz, readout_bw_hz = 20 000 Hz, lo_freq_hz resolved from
+  maser_center − 2.129 MHz, interferers = 8-source hospital-environment default),
+  `InterfererResult` (frozen dataclass: interferer, freq_offset_hz, attenuation_db,
+  residual_power_dbm, baseband_freq_hz, in_readout_band), `RFRejectionResult` (frozen
+  dataclass: interferer_results, worst_case_residual_dbm, worst_case_name,
+  any_in_readout_band, maser_fractional_bw, min_attenuation_db, max_attenuation_db),
+  `compute_lorentzian_attenuation(freq_hz, center_hz, bw_hz)` (core physics:
+  OOB_dB = 10 log₁₀[1 + (2Δf/BW)²]), `compute_fractional_bandwidth()` (BW/f₀),
+  `compute_interferer_rejection()` (per-interferer analysis), and
+  `compute_rf_rejection()` (primary entry point). Default 8 interferers span WiFi
+  2.4 GHz, WiFi 5 GHz, Bluetooth 2.4 GHz, LTE 700/1800/2600 MHz, hospital
+  Wi-Fi, and broadcast FM. Benchmark: maser fractional BW ≈ 3.33 × 10⁻⁵;
+  worst-case residual ≈ −115 dBm (broadcast FM at −20 dBm input); no standard
+  interferer maps into the ±10 kHz NMR readout band, closing R6 by passive physics.
+  All 8 public symbols exported from `nv_maser.physics`.
+- `docs/adr/ADR-021-rf-interference-rejection-model.md` — Architecture decision
+  record: Lorentzian cavity rejection model for R6; computed attenuation table for
+  8 interferers; 3 alternatives considered (Faraday cage rejected, passive filter
+  and active cancellation deferred); quantitative justification that no additional
+  shielding hardware is required.
+
+### Tests (SS17)
+
+- `tests/test_rf_rejection.py` — 55 tests across 6 classes:
+  `TestLorentzianAttenuation` (10): on-resonance zero dB, −3 dB at half-power point,
+  symmetry, monotonicity, per-source floor checks (WiFi >80 dB, 5 GHz >100 dB,
+  FM >90 dB), asymptotic formula agreement, BW sweep; `TestFractionalBandwidth` (4):
+  default value, positivity, monotonicity, custom config; `TestInterfererSpec` (7):
+  valid construction, negative/zero freq/bw raises, negative power valid, frozen;
+  `TestRFRejectionConfig` (7): LO resolution, explicit LO, 8 default interferers,
+  validation raises, custom list; `TestComputeInterfererRejection` (12): field-by-field
+  correctness, WiFi residual < −110 dBm, in-band detection, on-resonance no attenuation,
+  interferer reference preserved; `TestComputeRFRejection` (15): aggregate correctness,
+  all 8 defaults > 80 dB, none in readout band, worst-case identification/naming,
+  fractional BW, fractional BW < 1e-4, min/max ordering, None config, custom/empty
+  lists, residual < −100 dBm, wider BW less rejection, frozen result.
+  Suite total: **1944 passed, 75 skipped, 10 warnings**.
+
 ### Added (SS16)
 
 - `physics/gain_bandwidth_match.py` — Maser gain-bandwidth vs NMR readout
