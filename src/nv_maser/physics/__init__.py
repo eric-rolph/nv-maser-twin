@@ -171,7 +171,10 @@ from .t1t2_estimator import (  # noqa: F401
     T1T2CrossValidation,
     BlandAltmanResult,
     BlandAltmanT1T2,
+    BiexpT2FitResult,
     fit_t2_monoexponential,
+    fit_t2_biexponential,
+    select_t2_model,
     fit_t1_saturation_recovery,
     map_t2_from_cpmg,
     map_t1_from_saturation_recovery,
@@ -213,9 +216,15 @@ from .sensitivity import (  # noqa: F401
 )
 from .stability import (  # noqa: F401
     OscillatorStabilityResult,
+    NoiseProcessADEV,
+    CombinedADEVResult,
     compute_white_fm_allan_deviation,
     compute_allan_deviation_from_psd,
     compute_oscillator_stability,
+    compute_white_pm_adev,
+    compute_flicker_fm_adev,
+    compute_random_walk_fm_adev,
+    compute_combined_allan_deviation,
 )
 from .spin_squeezing import (  # noqa: F401
     REGIME_COHERENT,
@@ -240,6 +249,8 @@ from .squeezing_dynamics import (  # noqa: F401
     OATIdealTrajectory,
     OATDecoherenceTrajectory,
     SqueezingFeasibility,
+    TATIdealTrajectory,
+    TATDecoherenceTrajectory,
     oat_xi2_ideal,
     oat_optimal_time,
     apply_decoherence,
@@ -247,6 +258,10 @@ from .squeezing_dynamics import (  # noqa: F401
     compute_oat_with_decoherence,
     estimate_oat_chi,
     compute_squeezing_feasibility,
+    tat_xi2_ideal,
+    tat_optimal_time,
+    compute_tat_ideal_trajectory,
+    compute_tat_with_decoherence,
 )
 from .amplifier import (  # noqa: F401
     SIGMA_2,

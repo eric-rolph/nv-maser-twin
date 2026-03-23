@@ -26,11 +26,17 @@ from nv_maser.physics.sensitivity import compute_sensitivity
 from nv_maser.physics.signal_chain import compute_signal_chain_budget
 from nv_maser.config import MaserConfig, SignalChainConfig
 from nv_maser.physics.stability import (
+    CombinedADEVResult,
+    NoiseProcessADEV,
     OscillatorStabilityResult,
     _compute_log_slope,
     compute_allan_deviation_from_psd,
+    compute_combined_allan_deviation,
+    compute_flicker_fm_adev,
     compute_oscillator_stability,
+    compute_random_walk_fm_adev,
     compute_white_fm_allan_deviation,
+    compute_white_pm_adev,
 )
 
 _TWO_PI = 2.0 * math.pi
@@ -432,6 +438,182 @@ class TestComputeOscillatorStability:
         with pytest.raises(ValueError):
             compute_oscillator_stability(np.array([0.0, 1.0]), noise, nv_cfg)
 
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Multi-noise-process ADEV (SS28)
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Shared test constants — NV maser carrier and gyromagnetic ratio
+_CARRIER_HZ = 2.87e9  # NV zero-field splitting
+_GAMMA_E = 28.024e9   # γ_e in Hz/T
+
+
+class TestWhitePmAdev:
+    """Tests for compute_white_pm_adev()."""
+
+    @pytest.fixture
+    def tau(self):
+        return np.logspace(-2, 2, 50)
+
+    def test_slope_minus_one(self, tau):
+        """WPM Allan deviation has σ_y(τ) ∝ τ^{-1} → σ_B slope = -1."""
+        sigma = compute_white_pm_adev(tau, h2=1e-20, f_h=1e6,
+                                       carrier_frequency_hz=_CARRIER_HZ,
+                                       gamma_e_hz_per_t=_GAMMA_E)
+        slope = _compute_log_slope(tau, sigma)
+        assert slope == pytest.approx(-1.0, abs=0.05)
+
+    def test_doubling_tau_halves_sigma(self, tau):
+        """σ_B,WPM(2τ) = σ_B,WPM(τ) / 2."""
+        sigma = compute_white_pm_adev(tau, h2=1e-20, f_h=1e6,
+                                       carrier_frequency_hz=_CARRIER_HZ,
+                                       gamma_e_hz_per_t=_GAMMA_E)
+        ratio = sigma[1:] / sigma[:-1]
+        tau_ratio = tau[1:] / tau[:-1]
+        expected_ratio = 1.0 / tau_ratio
+        np.testing.assert_allclose(ratio, expected_ratio, rtol=1e-10)
+
+    def test_zero_h2_gives_zero(self, tau):
+        sigma = compute_white_pm_adev(tau, h2=0.0, f_h=1e6,
+                                       carrier_frequency_hz=_CARRIER_HZ,
+                                       gamma_e_hz_per_t=_GAMMA_E)
+        np.testing.assert_allclose(sigma, 0.0)
+
+    def test_positive_output(self, tau):
+        sigma = compute_white_pm_adev(tau, h2=1e-20, f_h=1e6,
+                                       carrier_frequency_hz=_CARRIER_HZ,
+                                       gamma_e_hz_per_t=_GAMMA_E)
+        assert np.all(sigma > 0)
+
+
+class TestFlickerFmAdev:
+    """Tests for compute_flicker_fm_adev()."""
+
+    @pytest.fixture
+    def tau(self):
+        return np.logspace(-2, 2, 50)
+
+    def test_constant_across_tau(self, tau):
+        """Flicker FM: σ_B is constant (independent of τ)."""
+        sigma = compute_flicker_fm_adev(tau, h_minus1=1e-26,
+                                         carrier_frequency_hz=_CARRIER_HZ,
+                                         gamma_e_hz_per_t=_GAMMA_E)
+        np.testing.assert_allclose(sigma, sigma[0], rtol=1e-12)
+
+    def test_slope_zero(self, tau):
+        sigma = compute_flicker_fm_adev(tau, h_minus1=1e-26,
+                                         carrier_frequency_hz=_CARRIER_HZ,
+                                         gamma_e_hz_per_t=_GAMMA_E)
+        slope = _compute_log_slope(tau, sigma)
+        assert np.all(np.abs(slope) < 0.01)
+
+    def test_zero_h_minus1_gives_zero(self, tau):
+        sigma = compute_flicker_fm_adev(tau, h_minus1=0.0,
+                                         carrier_frequency_hz=_CARRIER_HZ,
+                                         gamma_e_hz_per_t=_GAMMA_E)
+        np.testing.assert_allclose(sigma, 0.0)
+
+
+class TestRandomWalkFmAdev:
+    """Tests for compute_random_walk_fm_adev()."""
+
+    @pytest.fixture
+    def tau(self):
+        return np.logspace(-2, 2, 50)
+
+    def test_slope_plus_half(self, tau):
+        """RW FM: σ_y(τ) ∝ τ^{+0.5} → σ_B slope = +0.5."""
+        sigma = compute_random_walk_fm_adev(tau, h_minus2=1e-30,
+                                             carrier_frequency_hz=_CARRIER_HZ,
+                                             gamma_e_hz_per_t=_GAMMA_E)
+        slope = _compute_log_slope(tau, sigma)
+        assert slope == pytest.approx(0.5, abs=0.05)
+
+    def test_zero_h_minus2_gives_zero(self, tau):
+        sigma = compute_random_walk_fm_adev(tau, h_minus2=0.0,
+                                             carrier_frequency_hz=_CARRIER_HZ,
+                                             gamma_e_hz_per_t=_GAMMA_E)
+        np.testing.assert_allclose(sigma, 0.0)
+
+    def test_positive_output(self, tau):
+        sigma = compute_random_walk_fm_adev(tau, h_minus2=1e-30,
+                                             carrier_frequency_hz=_CARRIER_HZ,
+                                             gamma_e_hz_per_t=_GAMMA_E)
+        assert np.all(sigma > 0)
+
+
+class TestCombinedAllanDeviation:
+    """Tests for compute_combined_allan_deviation()."""
+
+    @pytest.fixture
+    def tau(self):
+        return np.logspace(-2, 3, 200)
+
+    def test_returns_correct_type(self, tau):
+        wpm = NoiseProcessADEV(
+            noise_type="white_pm",
+            tau_s=tau,
+            sigma_b_t=compute_white_pm_adev(tau, 1e-20, 1e6, _CARRIER_HZ, _GAMMA_E),
+            slope=-1.0,
+        )
+        result = compute_combined_allan_deviation(tau, [wpm])
+        assert isinstance(result, CombinedADEVResult)
+
+    def test_single_component_matches(self, tau):
+        """With one component, combined σ_B = component σ_B."""
+        wpm = NoiseProcessADEV(
+            noise_type="white_pm",
+            tau_s=tau,
+            sigma_b_t=compute_white_pm_adev(tau, 1e-20, 1e6, _CARRIER_HZ, _GAMMA_E),
+            slope=-1.0,
+        )
+        result = compute_combined_allan_deviation(tau, [wpm])
+        np.testing.assert_allclose(result.sigma_b_t, wpm.sigma_b_t, rtol=1e-12)
+
+    def test_bathtub_has_minimum(self, tau):
+        """WPM (slope -1) + RW FM (slope +0.5) creates a bathtub minimum."""
+        # Choose coefficients so the crossover falls well within τ range [0.01, 1000]
+        sigma_wpm = compute_white_pm_adev(tau, 1e-20, 1e6, _CARRIER_HZ, _GAMMA_E)
+        # Scale RW FM so it dominates at moderate τ
+        sigma_rw = compute_random_walk_fm_adev(tau, 1e-20, _CARRIER_HZ, _GAMMA_E)
+        wpm = NoiseProcessADEV("white_pm", tau, sigma_wpm, -1.0)
+        rw = NoiseProcessADEV("random_walk_fm", tau, sigma_rw, 0.5)
+        result = compute_combined_allan_deviation(tau, [wpm, rw])
+        # The minimum should NOT be at the first or last τ
+        idx_min = int(np.argmin(result.sigma_b_t))
+        assert 0 < idx_min < len(tau) - 1
+
+    def test_optimal_values_consistent(self, tau):
+        """optimal_tau_s and optimal_sigma_b_t match the minimum of sigma_b_t."""
+        sigma_wpm = compute_white_pm_adev(tau, 1e-20, 1e6, _CARRIER_HZ, _GAMMA_E)
+        sigma_rw = compute_random_walk_fm_adev(tau, 1e-30, _CARRIER_HZ, _GAMMA_E)
+        wpm = NoiseProcessADEV("white_pm", tau, sigma_wpm, -1.0)
+        rw = NoiseProcessADEV("random_walk_fm", tau, sigma_rw, 0.5)
+        result = compute_combined_allan_deviation(tau, [wpm, rw])
+        assert result.optimal_sigma_b_t == pytest.approx(
+            float(np.min(result.sigma_b_t)), rel=1e-12
+        )
+        assert result.optimal_tau_s == pytest.approx(
+            float(tau[np.argmin(result.sigma_b_t)]), rel=1e-12
+        )
+
+    def test_rss_combination(self, tau):
+        """Combined variance = sum of individual variances."""
+        sigma_wpm = compute_white_pm_adev(tau, 1e-20, 1e6, _CARRIER_HZ, _GAMMA_E)
+        sigma_ff = compute_flicker_fm_adev(tau, 1e-26, _CARRIER_HZ, _GAMMA_E)
+        wpm = NoiseProcessADEV("white_pm", tau, sigma_wpm, -1.0)
+        ff = NoiseProcessADEV("flicker_fm", tau, sigma_ff, 0.0)
+        result = compute_combined_allan_deviation(tau, [wpm, ff])
+        expected = np.sqrt(sigma_wpm**2 + sigma_ff**2)
+        np.testing.assert_allclose(result.sigma_b_t, expected, rtol=1e-12)
+
+    def test_unit_conversions(self, tau):
+        """sigma_b_nt and sigma_b_pt are correct conversions."""
+        sigma_wpm = compute_white_pm_adev(tau, 1e-20, 1e6, _CARRIER_HZ, _GAMMA_E)
+        wpm = NoiseProcessADEV("white_pm", tau, sigma_wpm, -1.0)
+        result = compute_combined_allan_deviation(tau, [wpm])
+        np.testing.assert_allclose(result.sigma_b_nt, result.sigma_b_t * 1e9, rtol=1e-12)
+        np.testing.assert_allclose(result.sigma_b_pt, result.sigma_b_t * 1e12, rtol=1e-12)
 
 # ══ TestAllanSlope ════════════════════════════════════════════════════════
 

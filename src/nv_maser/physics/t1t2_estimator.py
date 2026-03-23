@@ -203,6 +203,44 @@ class BlandAltmanT1T2:
     t1: BlandAltmanResult
     t2: BlandAltmanResult
 
+@dataclass(frozen=True)
+class BiexpT2FitResult:
+    """Result of a biexponential T2 fit.
+
+    Model: S(t) = A_s × exp(−t / T₂_short) + A_l × exp(−t / T₂_long)
+
+    Separates short-T2 (bound/myelin water) from long-T2 (free water)
+    components.  Relevant for multi-pool tissues, though at 50 mT this
+    is a second-order effect (ADR-007).
+
+    Attributes
+    ----------
+    t2_short_s : float
+        Short-component T2 (s).
+    t2_long_s : float
+        Long-component T2 (s).
+    fraction_short : float
+        Amplitude fraction A_short / (A_short + A_long) in [0, 1].
+    s0 : float
+        Total amplitude A_short + A_long.
+    r_squared : float
+        R² goodness-of-fit.
+    residuals_rms : float
+        RMS residual.
+    aic : float
+        Akaike Information Criterion: n·ln(RSS/n) + 2k  (k=4).
+    converged : bool
+        False if curve_fit did not converge.
+    """
+
+    t2_short_s: float
+    t2_long_s: float
+    fraction_short: float
+    s0: float
+    r_squared: float
+    residuals_rms: float
+    aic: float
+    converged: bool
 
 # ── Core fitting functions ────────────────────────────────────────
 
@@ -302,6 +340,134 @@ def fit_t2_monoexponential(
         residuals_rms=rms_res,
         converged=converged,
     )
+
+
+def _compute_aic(n: int, rss: float, k: int) -> float:
+    """Akaike Information Criterion: n·ln(RSS/n) + 2k."""
+    if n <= 0 or rss <= 0:
+        return float("inf")
+    return n * math.log(rss / n) + 2 * k
+
+
+def fit_t2_biexponential(
+    echo_amplitudes: NDArray[np.float64],
+    echo_times_s: NDArray[np.float64],
+) -> BiexpT2FitResult:
+    """Fit S(t) = A_s exp(−t/T₂_s) + A_l exp(−t/T₂_l) to a CPMG echo train.
+
+    Four-parameter biexponential fit with constrained bounds to separate
+    short-T2 and long-T2 water pools.  By convention T₂_short < T₂_long;
+    if the optimizer returns them swapped, they are reordered.
+
+    Initial guesses are seeded from a monoexponential fit for robustness.
+    The AIC is stored for model-selection comparison against the mono fit.
+
+    Args:
+        echo_amplitudes: echo magnitudes at each echo time.
+        echo_times_s: echo centre times in seconds.
+
+    Returns:
+        BiexpT2FitResult with fitted parameters, R², and AIC.
+
+    Raises:
+        ValueError: if fewer than 4 echoes are provided.
+    """
+    n = len(echo_amplitudes)
+    if n < 4:
+        raise ValueError(f"Need at least 4 echo amplitudes for biexp fit, got {n}.")
+    if len(echo_amplitudes) != len(echo_times_s):
+        raise ValueError("echo_amplitudes and echo_times_s must have equal length.")
+
+    # Seed from monoexponential
+    mono = fit_t2_monoexponential(echo_amplitudes, echo_times_s)
+    s0_mono = max(mono.s0, 1e-15)
+    t2_mono = max(mono.t2_s, 1e-5)
+
+    a_s_init = s0_mono * 0.3
+    a_l_init = s0_mono * 0.7
+    t2_s_init = float(np.clip(t2_mono * 0.4, 5e-4, 50.0))
+    t2_l_init = float(np.clip(t2_mono * 2.5, 5e-4, 99.0))
+    if t2_s_init >= t2_l_init:
+        t2_s_init = t2_l_init * 0.3
+
+    def _model(t: NDArray, a_s: float, t2_s: float, a_l: float, t2_l: float) -> NDArray:
+        return a_s * np.exp(-t / t2_s) + a_l * np.exp(-t / t2_l)
+
+    # Bounds: amplitudes in [0, 10], T2 in [0.5 ms, 100 s]
+    bounds = ([0.0, 5e-4, 0.0, 5e-4], [10.0, 100.0, 10.0, 100.0])
+
+    converged = True
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", OptimizeWarning)
+            popt, _ = curve_fit(
+                _model,
+                echo_times_s,
+                echo_amplitudes,
+                p0=[a_s_init, t2_s_init, a_l_init, t2_l_init],
+                bounds=bounds,
+                maxfev=20_000,
+            )
+        a_s, t2_s, a_l, t2_l = (float(v) for v in popt)
+    except (RuntimeError, ValueError):
+        converged = False
+        a_s, t2_s, a_l, t2_l = a_s_init, t2_s_init, a_l_init, t2_l_init
+
+    # Enforce T2_short < T2_long
+    if t2_s > t2_l:
+        a_s, a_l = a_l, a_s
+        t2_s, t2_l = t2_l, t2_s
+
+    s0_fit = a_s + a_l
+    frac_short = a_s / s0_fit if s0_fit > 1e-30 else 0.5
+
+    fitted = _model(echo_times_s, a_s, t2_s, a_l, t2_l)
+    ss_res = float(np.sum((echo_amplitudes - fitted) ** 2))
+    ss_tot = float(np.sum((echo_amplitudes - np.mean(echo_amplitudes)) ** 2))
+    r_sq = 1.0 - ss_res / ss_tot if ss_tot > 1e-30 else 1.0
+    rms_res = float(np.sqrt(np.mean((echo_amplitudes - fitted) ** 2)))
+    aic = _compute_aic(n, ss_res, k=4)
+
+    return BiexpT2FitResult(
+        t2_short_s=t2_s,
+        t2_long_s=t2_l,
+        fraction_short=float(np.clip(frac_short, 0.0, 1.0)),
+        s0=s0_fit,
+        r_squared=float(np.clip(r_sq, -1.0, 1.0)),
+        residuals_rms=rms_res,
+        aic=aic,
+        converged=converged,
+    )
+
+
+def select_t2_model(
+    echo_amplitudes: NDArray[np.float64],
+    echo_times_s: NDArray[np.float64],
+) -> tuple[str, T2FitResult | BiexpT2FitResult]:
+    """Select between monoexponential and biexponential T2 models via AIC.
+
+    Fits both models and returns the one with lower AIC.  If the data has
+    fewer than 4 points, only the monoexponential is fitted.
+
+    Returns
+    -------
+    tuple[str, T2FitResult | BiexpT2FitResult]
+        ("mono", result) or ("biexp", result).
+    """
+    mono = fit_t2_monoexponential(echo_amplitudes, echo_times_s)
+    n = len(echo_amplitudes)
+    fitted_mono = mono.s0 * np.exp(-echo_times_s / max(mono.t2_s, 1e-30))
+    rss_mono = float(np.sum((echo_amplitudes - fitted_mono) ** 2))
+    aic_mono = _compute_aic(n, rss_mono, k=2)
+
+    if n < 4:
+        return ("mono", mono)
+
+    biexp = fit_t2_biexponential(echo_amplitudes, echo_times_s)
+
+    if biexp.aic < aic_mono and biexp.converged:
+        return ("biexp", biexp)
+    return ("mono", mono)
 
 
 def fit_t1_saturation_recovery(

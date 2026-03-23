@@ -290,6 +290,226 @@ def _compute_log_slope(
     return np.gradient(log_sigma, log_tau)
 
 
+# ── Alternative τ-scaling noise models (ADR-012 deferred item) ─────────────
+
+
+@dataclass(frozen=True)
+class NoiseProcessADEV:
+    """Allan deviation contribution from a single noise process.
+
+    Attributes
+    ----------
+    noise_type : str
+        ``"white_fm"``, ``"white_pm"``, ``"flicker_fm"``,
+        or ``"random_walk_fm"``.
+    tau_s : NDArray[np.float64]
+        Integration time grid (s).
+    sigma_b_t : NDArray[np.float64]
+        σ_B(τ) contribution from this noise process (T).
+    slope : float
+        Expected log-log slope of σ_B(τ) for this process.
+    """
+
+    noise_type: str
+    tau_s: NDArray[np.float64]
+    sigma_b_t: NDArray[np.float64]
+    slope: float
+
+
+@dataclass(frozen=True)
+class CombinedADEVResult:
+    """Combined Allan deviation from multiple noise processes.
+
+    Attributes
+    ----------
+    tau_s : NDArray[np.float64]
+        Integration time grid (s).
+    sigma_b_t : NDArray[np.float64]
+        RSS-combined σ_B(τ) (T).
+    sigma_b_nt : NDArray[np.float64]
+        σ_B(τ) in nanotesla.
+    sigma_b_pt : NDArray[np.float64]
+        σ_B(τ) in picotesla.
+    components : list[NoiseProcessADEV]
+        Individual noise contributions.
+    optimal_tau_s : float
+        τ at minimum σ_B (best averaging time).
+    optimal_sigma_b_t : float
+        Minimum σ_B (T).
+    """
+
+    tau_s: NDArray[np.float64]
+    sigma_b_t: NDArray[np.float64]
+    sigma_b_nt: NDArray[np.float64]
+    sigma_b_pt: NDArray[np.float64]
+    components: list[NoiseProcessADEV]
+    optimal_tau_s: float
+    optimal_sigma_b_t: float
+
+
+def compute_white_pm_adev(
+    tau_s: NDArray[np.float64],
+    h2: float,
+    f_h: float,
+    carrier_frequency_hz: float,
+    gamma_e_hz_per_t: float,
+) -> NDArray[np.float64]:
+    """White phase modulation ADEV — slope −1 on σ_y(τ) log-log plot.
+
+    Additive white noise (thermal / Friis chain) manifests as white phase
+    modulation with one-sided PSD S_φ(f) = h₂ (constant).  The Allan
+    variance is bandwidth-dependent:
+
+        σ_y²(τ) = 3 h₂ f_H / (4π² τ²)
+
+    where f_H is the measurement bandwidth (Hz) and h₂ is the WPM
+    spectral coefficient (rad²/Hz³ in the standard notation, or
+    equivalently dBc/Hz at all offsets for white PM).
+
+    Parameters
+    ----------
+    tau_s : NDArray
+        Integration time array (s).  All values must be > 0.
+    h2 : float
+        White PM spectral coefficient.  Must be ≥ 0.
+    f_h : float
+        One-sided measurement bandwidth (Hz).  Must be > 0.
+    carrier_frequency_hz : float
+        ν₀ (Hz).  Must be > 0.
+    gamma_e_hz_per_t : float
+        γ_e (Hz/T).
+
+    Returns
+    -------
+    NDArray
+        σ_B(τ) contribution from WPM (T).
+    """
+    tau = np.asarray(tau_s, dtype=np.float64)
+    sigma_y_sq = 3.0 * h2 * f_h / (4.0 * math.pi**2 * tau**2)
+    sigma_y = np.sqrt(np.maximum(sigma_y_sq, 0.0))
+    return sigma_y * carrier_frequency_hz / gamma_e_hz_per_t
+
+
+def compute_flicker_fm_adev(
+    tau_s: NDArray[np.float64],
+    h_minus1: float,
+    carrier_frequency_hz: float,
+    gamma_e_hz_per_t: float,
+) -> NDArray[np.float64]:
+    """Flicker frequency modulation ADEV — slope 0 (flat) on σ_y(τ).
+
+    1/f frequency noise with S_y(f) = h₋₁ / f.  The Allan variance is
+    independent of τ:
+
+        σ_y²(τ) = 2 ln(2) × h₋₁
+
+    This produces the characteristic "flicker floor" in ADEV plots.
+
+    Parameters
+    ----------
+    tau_s : NDArray
+        Integration time array (s).
+    h_minus1 : float
+        Flicker FM spectral coefficient.  Must be ≥ 0.
+    carrier_frequency_hz : float
+        ν₀ (Hz).
+    gamma_e_hz_per_t : float
+        γ_e (Hz/T).
+
+    Returns
+    -------
+    NDArray
+        σ_B(τ) contribution (T), constant across τ.
+    """
+    tau = np.asarray(tau_s, dtype=np.float64)
+    sigma_y = math.sqrt(2.0 * math.log(2.0) * abs(h_minus1))
+    return np.full_like(tau, sigma_y * carrier_frequency_hz / gamma_e_hz_per_t)
+
+
+def compute_random_walk_fm_adev(
+    tau_s: NDArray[np.float64],
+    h_minus2: float,
+    carrier_frequency_hz: float,
+    gamma_e_hz_per_t: float,
+) -> NDArray[np.float64]:
+    """Random-walk frequency modulation ADEV — slope +0.5 on σ_y(τ).
+
+    Thermal drift and environmental perturbations produce S_y(f) = h₋₂/f².
+    The Allan variance grows linearly with τ:
+
+        σ_y²(τ) = (2π²/3) × h₋₂ × τ
+
+    This is the dominant noise at very long averaging times and defines
+    the practical limit of field stability.
+
+    Parameters
+    ----------
+    tau_s : NDArray
+        Integration time array (s).
+    h_minus2 : float
+        Random-walk FM spectral coefficient.  Must be ≥ 0.
+    carrier_frequency_hz : float
+        ν₀ (Hz).
+    gamma_e_hz_per_t : float
+        γ_e (Hz/T).
+
+    Returns
+    -------
+    NDArray
+        σ_B(τ) contribution (T).
+    """
+    tau = np.asarray(tau_s, dtype=np.float64)
+    sigma_y_sq = (2.0 * math.pi**2 / 3.0) * abs(h_minus2) * tau
+    sigma_y = np.sqrt(np.maximum(sigma_y_sq, 0.0))
+    return sigma_y * carrier_frequency_hz / gamma_e_hz_per_t
+
+
+def compute_combined_allan_deviation(
+    tau_s: NDArray[np.float64],
+    components: list[NoiseProcessADEV],
+) -> CombinedADEVResult:
+    """RSS-combine multiple noise process ADEV contributions.
+
+    The total Allan variance is the sum of the individual variances
+    (independent noise sources add in quadrature):
+
+        σ_B²(τ) = Σᵢ σ_B,i²(τ)
+
+    The resulting "ADEV bathtub curve" has a minimum at the optimal
+    averaging time τ_opt, where the rising random-walk component
+    balances the falling white-FM or white-PM component.
+
+    Parameters
+    ----------
+    tau_s : NDArray
+        Integration time array (s).
+    components : list[NoiseProcessADEV]
+        Individual noise contributions (must share the same τ grid).
+
+    Returns
+    -------
+    CombinedADEVResult
+        Combined ADEV with minimum location and unit conversions.
+    """
+    tau = np.asarray(tau_s, dtype=np.float64)
+    sigma_sq_total = np.zeros_like(tau)
+    for comp in components:
+        sigma_sq_total += comp.sigma_b_t**2
+
+    sigma_b = np.sqrt(sigma_sq_total)
+    idx_min = int(np.argmin(sigma_b))
+
+    return CombinedADEVResult(
+        tau_s=tau,
+        sigma_b_t=sigma_b,
+        sigma_b_nt=sigma_b * 1.0e9,
+        sigma_b_pt=sigma_b * 1.0e12,
+        components=list(components),
+        optimal_tau_s=float(tau[idx_min]),
+        optimal_sigma_b_t=float(sigma_b[idx_min]),
+    )
+
+
 def compute_oscillator_stability(
     tau_s: NDArray[np.float64],
     maser_noise_result: MaserNoiseResult,

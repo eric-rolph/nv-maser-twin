@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added (SS28)
+
+- **TAT squeezing** in `squeezing_dynamics.py` — two-axis twisting dynamics
+  with Heisenberg-limited scaling (ξ² ∝ 1/N).  2 dataclasses + 4 functions:
+  `tat_xi2_ideal`, `tat_optimal_time`, `compute_tat_ideal_trajectory`,
+  `compute_tat_with_decoherence`.  Closes ADR-013 deferred item "TAT".
+- **Biexponential T2 fit** in `t1t2_estimator.py` — multi-pool T2 model
+  with AIC-based selection: `BiexpT2FitResult`, `fit_t2_biexponential`,
+  `select_t2_model`, `_compute_aic`.  Closes ADR-007 deferred item.
+- **Allan deviation τ scaling** in `stability.py` — white PM (slope −1),
+  flicker FM (flat), random-walk FM (slope +0.5), and RSS combination:
+  `NoiseProcessADEV`, `CombinedADEVResult`, `compute_white_pm_adev`,
+  `compute_flicker_fm_adev`, `compute_random_walk_fm_adev`,
+  `compute_combined_allan_deviation`.  Closes ADR-012 deferred item.
+- 44 new tests across 3 test files (17 TAT, 12 biexp, 15 ADEV).
+- ADR: `docs/adr/ADR-032-deferred-items-batch2.md`.
+
 ### Added (SS27)
 
 - `src/nv_maser/physics/squeezing_dynamics.py` — OAT squeezing dynamics with

@@ -189,6 +189,83 @@ class SqueezingFeasibility:
     squeezed_sensitivity_t_per_sqrthz: float
 
 
+@dataclass(frozen=True)
+class TATIdealTrajectory:
+    """Time-resolved TAT squeezing trajectory without decoherence.
+
+    Attributes
+    ----------
+    times_s : NDArray
+        Evolution times sampled (s).
+    xi2_r : NDArray
+        Wineland squeezing parameter ξ²_R(t) at each time.
+    optimal_time_s : float
+        Time of minimum ξ²_R (best squeezing).
+    optimal_xi2_r : float
+        Minimum ξ²_R achieved.
+    metrological_gain_db : float
+        −10 log₁₀(optimal_xi2_r) at the optimum.
+    n_spins : float
+        Number of spins N.
+    chi_hz : float
+        TAT coupling strength χ (Hz).
+    """
+
+    times_s: NDArray[np.float64]
+    xi2_r: NDArray[np.float64]
+    optimal_time_s: float
+    optimal_xi2_r: float
+    metrological_gain_db: float
+    n_spins: float
+    chi_hz: float
+
+
+@dataclass(frozen=True)
+class TATDecoherenceTrajectory:
+    """Time-resolved TAT squeezing with T₂* decoherence.
+
+    Attributes
+    ----------
+    times_s : NDArray
+        Evolution times sampled (s).
+    xi2_r_ideal : NDArray
+        Ideal ξ²_R(t) (no decoherence).
+    xi2_r_with_decoherence : NDArray
+        ξ²_R(t) including T₂* decoherence penalty.
+    optimal_time_s : float
+        Time that minimises ξ²_R with decoherence.
+    optimal_xi2_r : float
+        Best achievable ξ²_R with decoherence.
+    ideal_optimal_xi2_r : float
+        Best ξ²_R *without* decoherence (for comparison).
+    metrological_gain_db : float
+        −10 log₁₀(optimal_xi2_r) at the decoherence-limited optimum.
+    decoherence_penalty_db : float
+        Loss of metrological gain due to T₂*.
+    n_spins : float
+        Number of spins N.
+    chi_hz : float
+        TAT coupling strength χ (Hz).
+    t2_star_s : float
+        Dephasing time T₂* (s).
+    chi_t2_star_product : float
+        Dimensionless figure of merit χ·T₂*.
+    """
+
+    times_s: NDArray[np.float64]
+    xi2_r_ideal: NDArray[np.float64]
+    xi2_r_with_decoherence: NDArray[np.float64]
+    optimal_time_s: float
+    optimal_xi2_r: float
+    ideal_optimal_xi2_r: float
+    metrological_gain_db: float
+    decoherence_penalty_db: float
+    n_spins: float
+    chi_hz: float
+    t2_star_s: float
+    chi_t2_star_product: float
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Core computation functions
 # ═══════════════════════════════════════════════════════════════════════════
@@ -455,6 +532,216 @@ def compute_oat_with_decoherence(
     penalty = gain_ideal - gain_deco
 
     return OATDecoherenceTrajectory(
+        times_s=times,
+        xi2_r_ideal=xi2_ideal,
+        xi2_r_with_decoherence=xi2_deco,
+        optimal_time_s=float(times[idx_deco]),
+        optimal_xi2_r=deco_opt,
+        ideal_optimal_xi2_r=ideal_opt,
+        metrological_gain_db=gain_deco,
+        decoherence_penalty_db=penalty,
+        n_spins=n_spins,
+        chi_hz=chi_hz,
+        t2_star_s=t2_star_s,
+        chi_t2_star_product=chi_hz * t2_star_s,
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# TAT (Two-Axis Twisting) functions
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+def tat_xi2_ideal(t: float | NDArray, n_spins: float, chi_hz: float) -> NDArray:
+    """Ideal TAT squeezing parameter ξ²_R(t) for large N.
+
+    Two-axis twisting H = χ(J_x² − J_y²) generates faster squeezing
+    than OAT and reaches the Heisenberg limit ξ²_R ∝ 1/N.
+
+    The large-N model uses a two-exponential form
+    (Kitagawa & Ueda 1993, Ma et al. 2011 Sec. 3.4):
+
+        ξ²_R(t) = exp(−Γt) + exp(+Γt) / (4N²)
+
+    where Γ = 2(N−1)μ and μ = 2πχ is the angular twisting rate.
+
+    Key properties:
+
+    * At t → 0⁺: ξ² → 1 + 1/(4N²) ≈ 1 (coherent spin state).
+    * Minimum: ξ²_min = 1/N at t_opt = ln(2N)/Γ (Heisenberg scaling).
+    * After optimum: anti-squeezed quadrature leakage causes rapid
+      degradation.
+
+    Parameters
+    ----------
+    t : float or NDArray
+        Evolution time(s) in seconds.
+    n_spins : float
+        Number of spins N.  Must be > 0.
+    chi_hz : float
+        TAT coupling strength χ (Hz).  Must be > 0.
+
+    Returns
+    -------
+    NDArray
+        ξ²_R(t) at each time point (clipped to Heisenberg floor 1/N).
+    """
+    t_arr = np.atleast_1d(np.asarray(t, dtype=np.float64))
+    mu = _TWO_PI * chi_hz
+    rate = 2.0 * (n_spins - 1.0) * mu  # Γ
+    gt = rate * t_arr
+
+    with np.errstate(over="ignore"):
+        squeeze = np.exp(-gt)
+        anti_squeeze = np.exp(gt) / (4.0 * n_spins**2)
+
+    xi2 = squeeze + anti_squeeze
+    # At t=0 the model gives 1 + 1/(4N²) ≈ 1; clamp CSS at 1.0
+    xi2 = np.where(gt > 0, xi2, 1.0)
+    # Heisenberg floor
+    xi2 = np.clip(xi2, 1.0 / n_spins, None)
+    return xi2
+
+
+def tat_optimal_time(n_spins: float, chi_hz: float) -> float:
+    """Optimal TAT squeezing time t_opt (s).
+
+    Minimises ξ²_R = exp(−Γt) + exp(+Γt)/(4N²), giving:
+
+        t_opt = ln(2N) / Γ  =  ln(2N) / [2(N−1) × 2πχ]
+
+    This is much shorter than the OAT optimal time and scales as
+    ln(N)/(Nχ) for large N.
+
+    Parameters
+    ----------
+    n_spins : float
+        Number of spins N.  Must be > 1.
+    chi_hz : float
+        TAT coupling strength χ (Hz).  Must be > 0.
+
+    Returns
+    -------
+    float
+        Optimal squeezing time in seconds.
+
+    Raises
+    ------
+    ValueError
+        If n_spins ≤ 1 or chi_hz ≤ 0.
+    """
+    if n_spins <= 1:
+        raise ValueError(f"n_spins must be > 1, got {n_spins}")
+    if chi_hz <= 0:
+        raise ValueError(f"chi_hz must be > 0, got {chi_hz}")
+    mu = _TWO_PI * chi_hz
+    rate = 2.0 * (n_spins - 1.0) * mu
+    return math.log(2.0 * n_spins) / rate
+
+
+def compute_tat_ideal_trajectory(
+    n_spins: float,
+    chi_hz: float,
+    *,
+    n_points: int = 200,
+    t_max_factor: float = 3.0,
+) -> TATIdealTrajectory:
+    """Compute the ideal TAT squeezing trajectory (no decoherence).
+
+    Parameters
+    ----------
+    n_spins : float
+        Number of spins N.  Must be > 1.
+    chi_hz : float
+        TAT coupling χ (Hz).  Must be > 0.
+    n_points : int
+        Number of time samples.
+    t_max_factor : float
+        Sample up to t_max_factor × t_opt.
+
+    Returns
+    -------
+    TATIdealTrajectory
+    """
+    if n_spins <= 1:
+        raise ValueError(f"n_spins must be > 1, got {n_spins}")
+    if chi_hz <= 0:
+        raise ValueError(f"chi_hz must be > 0, got {chi_hz}")
+
+    t_opt = tat_optimal_time(n_spins, chi_hz)
+    times = np.linspace(t_opt * 0.01, t_opt * t_max_factor, n_points)
+    xi2 = tat_xi2_ideal(times, n_spins, chi_hz)
+
+    idx_min = int(np.argmin(xi2))
+    opt_xi2 = float(xi2[idx_min])
+    gain_db = -10.0 * math.log10(max(opt_xi2, 1e-300))
+
+    return TATIdealTrajectory(
+        times_s=times,
+        xi2_r=xi2,
+        optimal_time_s=float(times[idx_min]),
+        optimal_xi2_r=opt_xi2,
+        metrological_gain_db=gain_db,
+        n_spins=n_spins,
+        chi_hz=chi_hz,
+    )
+
+
+def compute_tat_with_decoherence(
+    n_spins: float,
+    chi_hz: float,
+    t2_star_s: float,
+    *,
+    n_points: int = 200,
+    t_max_factor: float = 3.0,
+) -> TATDecoherenceTrajectory:
+    """Compute TAT squeezing trajectory with T₂* decoherence.
+
+    Uses the same André & Lukin (2002) decoherence overlay as OAT:
+
+        ξ²_R(t; T₂*) = ξ²_ideal(t) · exp(2t/T₂*) + [1 − exp(−2t/T₂*)]
+
+    Parameters
+    ----------
+    n_spins : float
+        Number of spins N.  Must be > 1.
+    chi_hz : float
+        TAT coupling χ (Hz).  Must be > 0.
+    t2_star_s : float
+        Dephasing time T₂* (s).  Must be > 0.
+    n_points : int
+        Number of time samples.
+    t_max_factor : float
+        Sample up to t_max_factor × t_opt.
+
+    Returns
+    -------
+    TATDecoherenceTrajectory
+    """
+    if n_spins <= 1:
+        raise ValueError(f"n_spins must be > 1, got {n_spins}")
+    if chi_hz <= 0:
+        raise ValueError(f"chi_hz must be > 0, got {chi_hz}")
+    if t2_star_s <= 0:
+        raise ValueError(f"t2_star_s must be > 0, got {t2_star_s}")
+
+    t_opt = tat_optimal_time(n_spins, chi_hz)
+    times = np.linspace(t_opt * 0.01, t_opt * t_max_factor, n_points)
+
+    xi2_ideal = tat_xi2_ideal(times, n_spins, chi_hz)
+    xi2_deco = apply_decoherence(xi2_ideal, times, t2_star_s)
+
+    idx_ideal = int(np.argmin(xi2_ideal))
+    ideal_opt = float(xi2_ideal[idx_ideal])
+
+    idx_deco = int(np.argmin(xi2_deco))
+    deco_opt = float(xi2_deco[idx_deco])
+
+    gain_deco = -10.0 * math.log10(max(deco_opt, 1e-300))
+    gain_ideal = -10.0 * math.log10(max(ideal_opt, 1e-300))
+    penalty = gain_ideal - gain_deco
+
+    return TATDecoherenceTrajectory(
         times_s=times,
         xi2_r_ideal=xi2_ideal,
         xi2_r_with_decoherence=xi2_deco,

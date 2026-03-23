@@ -9,6 +9,8 @@ from nv_maser.physics.squeezing_dynamics import (
     OATDecoherenceTrajectory,
     OATIdealTrajectory,
     SqueezingFeasibility,
+    TATIdealTrajectory,
+    TATDecoherenceTrajectory,
     apply_decoherence,
     compute_oat_ideal_trajectory,
     compute_oat_with_decoherence,
@@ -16,6 +18,10 @@ from nv_maser.physics.squeezing_dynamics import (
     estimate_oat_chi,
     oat_optimal_time,
     oat_xi2_ideal,
+    tat_xi2_ideal,
+    tat_optimal_time,
+    compute_tat_ideal_trajectory,
+    compute_tat_with_decoherence,
 )
 
 # ── Shared constants ───────────────────────────────────────────────────────
@@ -285,6 +291,149 @@ def test_estimate_oat_chi_positive():
     nv = NVConfig()
     chi = estimate_oat_chi(nv)
     assert chi > 0
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# TAT — tat_optimal_time
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+def test_tat_optimal_time_formula():
+    """t_opt = ln(2N) / [2(N-1) × 2πχ]."""
+    t = tat_optimal_time(_N_SPINS, _CHI_HZ)
+    rate = 2.0 * (_N_SPINS - 1.0) * _TWO_PI * _CHI_HZ
+    expected = math.log(2.0 * _N_SPINS) / rate
+    assert t == pytest.approx(expected, rel=1e-10)
+
+
+def test_tat_optimal_time_much_shorter_than_oat():
+    """TAT t_opt ≪ OAT t_opt because TAT squeezes exponentially."""
+    t_tat = tat_optimal_time(_N_SPINS, _CHI_HZ)
+    t_oat = oat_optimal_time(_N_SPINS, _CHI_HZ)
+    assert t_tat < t_oat * 0.01  # orders of magnitude shorter
+
+
+def test_tat_optimal_time_error_n1():
+    with pytest.raises(ValueError, match="n_spins"):
+        tat_optimal_time(1.0, _CHI_HZ)
+
+
+def test_tat_optimal_time_error_chi0():
+    with pytest.raises(ValueError, match="chi_hz"):
+        tat_optimal_time(_N_SPINS, 0.0)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# TAT — tat_xi2_ideal
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+def test_tat_xi2_ideal_minimum_near_1_over_n():
+    """TAT minimum ξ²_R = 1/N (Heisenberg scaling)."""
+    N = 1e6
+    chi = 10.0
+    t_opt = tat_optimal_time(N, chi)
+    xi2 = tat_xi2_ideal(t_opt, N, chi).item()
+    expected = 1.0 / N
+    assert xi2 == pytest.approx(expected, rel=0.01)
+
+
+def test_tat_xi2_ideal_heisenberg_scaling():
+    """Doubling N halves ξ²_R,min (Heisenberg: 1/N)."""
+    N1 = 1e6
+    N2 = 2e6
+    chi = 10.0
+    xi2_1 = tat_xi2_ideal(tat_optimal_time(N1, chi), N1, chi).item()
+    xi2_2 = tat_xi2_ideal(tat_optimal_time(N2, chi), N2, chi).item()
+    # ξ²_min(2N) / ξ²_min(N) ≈ 0.5
+    assert xi2_2 / xi2_1 == pytest.approx(0.5, rel=0.05)
+
+
+def test_tat_xi2_ideal_better_than_oat():
+    """TAT minimum ξ²_R < OAT minimum ξ²_R for same parameters."""
+    N = 1e6
+    chi = 10.0
+    tat_min = tat_xi2_ideal(tat_optimal_time(N, chi), N, chi).item()
+    oat_min = oat_xi2_ideal(oat_optimal_time(N, chi), N, chi).min().item()
+    assert tat_min < oat_min
+
+
+def test_tat_xi2_ideal_at_t0_near_css():
+    """At t = 0 the TAT state should be near the CSS (ξ² ≈ 1)."""
+    xi2 = tat_xi2_ideal(0.0, _N_SPINS, _CHI_HZ).item()
+    assert xi2 == pytest.approx(1.0, abs=1e-6)
+
+
+def test_tat_xi2_ideal_increases_past_optimum():
+    """After t_opt, ξ² should increase rapidly (anti-squeeze leakage)."""
+    N = 1e6
+    chi = 10.0
+    t_opt = tat_optimal_time(N, chi)
+    xi2_opt = tat_xi2_ideal(t_opt, N, chi).item()
+    xi2_late = tat_xi2_ideal(t_opt * 2.0, N, chi).item()
+    assert xi2_late > xi2_opt * 2.0
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# TAT — compute_tat_ideal_trajectory
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+def test_tat_ideal_trajectory_type():
+    traj = compute_tat_ideal_trajectory(1e6, 10.0)
+    assert isinstance(traj, TATIdealTrajectory)
+
+
+def test_tat_ideal_trajectory_minimum_near_heisenberg():
+    N = 1e6
+    traj = compute_tat_ideal_trajectory(N, 10.0, n_points=500)
+    assert traj.optimal_xi2_r == pytest.approx(1.0 / N, rel=0.05)
+
+
+def test_tat_ideal_trajectory_gain_db_positive():
+    traj = compute_tat_ideal_trajectory(1e8, 5.0)
+    assert traj.metrological_gain_db > 0
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# TAT — compute_tat_with_decoherence
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+def test_tat_decoherence_type():
+    traj = compute_tat_with_decoherence(1e6, 10.0, 1e-3)
+    assert isinstance(traj, TATDecoherenceTrajectory)
+
+
+def test_tat_decoherence_worse_than_ideal():
+    N = 1e6
+    traj = compute_tat_with_decoherence(N, 10.0, 1e-6)
+    # Decoherence-limited ξ² should be worse than ideal minimum
+    assert traj.optimal_xi2_r >= traj.ideal_optimal_xi2_r
+
+
+def test_tat_decoherence_penalty_positive():
+    traj = compute_tat_with_decoherence(1e6, 10.0, 1e-6)
+    assert traj.decoherence_penalty_db >= 0
+
+
+def test_tat_decoherence_long_t2_recovers_ideal():
+    """With very long T₂*, decoherence barely affects TAT."""
+    N = 1e4
+    chi = 100.0
+    traj = compute_tat_with_decoherence(N, chi, t2_star_s=1e3, n_points=500)
+    assert traj.optimal_xi2_r == pytest.approx(
+        traj.ideal_optimal_xi2_r, rel=0.1
+    )
+
+
+def test_tat_decoherence_error_invalid_params():
+    with pytest.raises(ValueError, match="n_spins"):
+        compute_tat_with_decoherence(1.0, 10.0, 1e-3)
+    with pytest.raises(ValueError, match="chi_hz"):
+        compute_tat_with_decoherence(1e6, 0.0, 1e-3)
+    with pytest.raises(ValueError, match="t2_star_s"):
+        compute_tat_with_decoherence(1e6, 10.0, 0.0)
 
 
 def test_estimate_oat_chi_order_of_magnitude():

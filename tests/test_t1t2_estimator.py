@@ -19,6 +19,7 @@ import pytest
 
 from nv_maser.physics.t1t2_estimator import (
     AbnormalityFlag,
+    BiexpT2FitResult,
     BlandAltmanResult,
     BlandAltmanT1T2,
     T1FitResult,
@@ -32,9 +33,11 @@ from nv_maser.physics.t1t2_estimator import (
     cross_validate_t1t2,
     detect_tissue_abnormalities,
     fit_t1_saturation_recovery,
+    fit_t2_biexponential,
     fit_t2_monoexponential,
     map_t1_from_saturation_recovery,
     map_t2_from_cpmg,
+    select_t2_model,
 )
 from nv_maser.physics.depth_profile import (
     FOREARM_LAYERS,
@@ -450,6 +453,118 @@ class TestCrossValidateT1T2:
         result = cross_validate_t1t2(muscle_map, muscle_map)
         assert result.t1_correlation == pytest.approx(1.0, abs=1e-6)
         assert result.t2_correlation == pytest.approx(1.0, abs=1e-6)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# TestBiexpT2Fit — biexponential T2 fitting (ADR-007)
+# ═══════════════════════════════════════════════════════════════════════════
+
+def _synth_biexp(echo_times, a_s, t2_s, a_l, t2_l, *, noise_std=0.0, rng=None):
+    """Helper: generate synthetic biexponential decay."""
+    signal = a_s * np.exp(-echo_times / t2_s) + a_l * np.exp(-echo_times / t2_l)
+    if noise_std > 0 and rng is not None:
+        signal += rng.normal(0, noise_std, size=signal.shape)
+    return np.maximum(signal, 0.0)
+
+
+class TestBiexpT2Fit:
+    """Tests for fit_t2_biexponential() and select_t2_model()."""
+
+    @pytest.fixture
+    def echo_times(self):
+        return np.linspace(0.005, 0.200, 20)  # 5 ms to 200 ms, 20 echoes
+
+    def test_returns_correct_type(self, echo_times):
+        signal = _synth_biexp(echo_times, 0.3, 0.020, 0.7, 0.080)
+        result = fit_t2_biexponential(signal, echo_times)
+        assert isinstance(result, BiexpT2FitResult)
+
+    def test_recovers_two_pool_parameters(self, echo_times):
+        """Should recover known T2_short and T2_long from clean data."""
+        t2_s_true, t2_l_true = 0.020, 0.080
+        a_s_true, a_l_true = 0.3, 0.7
+        signal = _synth_biexp(echo_times, a_s_true, t2_s_true, a_l_true, t2_l_true)
+        result = fit_t2_biexponential(signal, echo_times)
+        assert result.t2_short_s == pytest.approx(t2_s_true, rel=0.05)
+        assert result.t2_long_s == pytest.approx(t2_l_true, rel=0.05)
+        assert result.fraction_short == pytest.approx(
+            a_s_true / (a_s_true + a_l_true), abs=0.05
+        )
+
+    def test_t2_short_less_than_t2_long(self, echo_times):
+        """T2_short < T2_long must always hold (convention)."""
+        # Provide swapped initial order
+        signal = _synth_biexp(echo_times, 0.6, 0.090, 0.4, 0.015)
+        result = fit_t2_biexponential(signal, echo_times)
+        assert result.t2_short_s <= result.t2_long_s
+
+    def test_r_squared_high_on_clean_data(self, echo_times):
+        signal = _synth_biexp(echo_times, 0.3, 0.020, 0.7, 0.080)
+        result = fit_t2_biexponential(signal, echo_times)
+        assert result.r_squared > 0.999
+
+    def test_aic_finite(self, echo_times):
+        signal = _synth_biexp(echo_times, 0.3, 0.020, 0.7, 0.080)
+        result = fit_t2_biexponential(signal, echo_times)
+        assert math.isfinite(result.aic)
+
+    def test_error_fewer_than_4_echoes(self):
+        with pytest.raises(ValueError, match="4"):
+            fit_t2_biexponential(np.array([1.0, 0.5, 0.3]), np.array([0.01, 0.02, 0.03]))
+
+    def test_converged_flag_true_on_clean(self, echo_times):
+        signal = _synth_biexp(echo_times, 0.3, 0.020, 0.7, 0.080)
+        result = fit_t2_biexponential(signal, echo_times)
+        assert result.converged is True
+
+    def test_s0_equals_sum_of_amplitudes(self, echo_times):
+        a_s, a_l = 0.3, 0.7
+        signal = _synth_biexp(echo_times, a_s, 0.020, a_l, 0.080)
+        result = fit_t2_biexponential(signal, echo_times)
+        assert result.s0 == pytest.approx(a_s + a_l, rel=0.05)
+
+
+class TestSelectT2Model:
+    """Tests for AIC-based model selection."""
+
+    @pytest.fixture
+    def echo_times(self):
+        return np.linspace(0.005, 0.200, 20)
+
+    def test_monoexp_data_selects_mono(self, echo_times):
+        """Pure monoexponential data → model should prefer 'mono'."""
+        rng = np.random.default_rng(42)
+        signal = 1.0 * np.exp(-echo_times / 0.050) + rng.normal(0, 0.005, size=echo_times.shape)
+        signal = np.maximum(signal, 0.0)
+        model, _ = select_t2_model(signal, echo_times)
+        assert model == "mono"
+
+    def test_biexp_data_selects_biexp(self, echo_times):
+        """Clear two-pool data → model should prefer 'biexp'."""
+        signal = _synth_biexp(echo_times, 0.3, 0.015, 0.7, 0.100)
+        model, result = select_t2_model(signal, echo_times)
+        assert model == "biexp"
+        assert isinstance(result, BiexpT2FitResult)
+
+    def test_few_points_fallback_to_mono(self):
+        """With < 4 echoes, must always return 'mono'."""
+        times = np.array([0.01, 0.02, 0.03])
+        signal = np.exp(-times / 0.05)
+        model, result = select_t2_model(signal, times)
+        assert model == "mono"
+        assert isinstance(result, T2FitResult)
+
+
+# ── TestCrossValidateT1T2 (continued from original file) ─────────
+
+class TestCrossValidateT1T2Extended:
+
+    @pytest.fixture
+    def muscle_map(self):
+        return build_t1t2_map(
+            [TissueLayer("muscle", thickness_mm=5.0, t1_ms=600, t2_ms=35)],
+            depth_step_mm=1.0,
+        )
 
     def test_identical_maps_zero_error(self, muscle_map):
         """Comparing a map with itself should give zero relative errors."""
