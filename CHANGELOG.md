@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added (SS27)
+
+- `src/nv_maser/physics/squeezing_dynamics.py` — OAT squeezing dynamics with
+  T₂* decoherence overlay (André & Lukin 2002 model).  7 public functions,
+  3 dataclasses.  Closes ADR-013 deferred item "decoherence during squeezing".
+- `tests/test_squeezing_dynamics.py` — 49 tests for the new module.
+- `BlandAltmanResult`, `BlandAltmanT1T2`, `bland_altman_t1t2()` in
+  `t1t2_estimator.py` — Bland–Altman agreement analysis for clinical
+  validation of T1/T2 maps.  Closes ADR-007 deferred item.
+- 10 new tests in `TestBlandAltmanT1T2` class in `test_t1t2_estimator.py`.
+- ADR: `docs/adr/ADR-031-deferred-items-batch1.md`.
+
+### Changed (SS27)
+
+- `surface_coil.py`: replaced hardcoded 1 pF parasitic capacitance with
+  interwinding capacitance model for self-resonant frequency estimation.
+  Default coil SRF now ~387 MHz (was ~5 GHz with the old placeholder).
+
 ### Added (SS26)
 
 - `tests/test_main.py` — CLI entry-point unit tests; lifts `main.py` from

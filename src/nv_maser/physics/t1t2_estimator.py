@@ -160,6 +160,50 @@ class T1T2CrossValidation:
     n_depths: int                  # number of shared depth points compared
 
 
+@dataclass(frozen=True)
+class BlandAltmanResult:
+    """Bland–Altman agreement analysis for a single parameter (T1 or T2).
+
+    The Bland–Altman method plots (A+B)/2 vs (A−B) and computes bias
+    and 95% limits of agreement (LoA).  This is the standard clinical
+    validation approach for comparing two measurement methods (Bland &
+    Altman, Lancet 1986).
+
+    Attributes
+    ----------
+    bias : float
+        Mean difference (A − B).  Positive = method A reads higher.
+    std_diff : float
+        Standard deviation of (A − B).
+    lower_loa : float
+        Lower 95% limit of agreement: bias − 1.96 × std_diff.
+    upper_loa : float
+        Upper 95% limit of agreement: bias + 1.96 × std_diff.
+    means : NDArray[np.float64]
+        (A + B) / 2 at each depth — x-axis of Bland–Altman plot.
+    diffs : NDArray[np.float64]
+        (A − B) at each depth — y-axis of Bland–Altman plot.
+    n_points : int
+        Number of paired observations.
+    """
+
+    bias: float
+    std_diff: float
+    lower_loa: float
+    upper_loa: float
+    means: NDArray[np.float64]
+    diffs: NDArray[np.float64]
+    n_points: int
+
+
+@dataclass(frozen=True)
+class BlandAltmanT1T2:
+    """Bland–Altman results for both T1 and T2 parameters."""
+
+    t1: BlandAltmanResult
+    t2: BlandAltmanResult
+
+
 # ── Core fitting functions ────────────────────────────────────────
 
 
@@ -669,6 +713,57 @@ def cross_validate_t1t2(
         t1_mean_relative_error=float(np.mean(t1_rel)),
         t2_mean_relative_error=float(np.mean(t2_rel)),
         n_depths=n,
+    )
+
+
+def bland_altman_t1t2(
+    map_a: T1T2Map,
+    map_b: T1T2Map,
+) -> BlandAltmanT1T2:
+    """Bland–Altman agreement analysis between two T1/T2 maps.
+
+    Computes bias (mean difference) and 95% limits of agreement for both
+    T1 and T2 at shared depth points.  This is the standard clinical
+    method for comparing two measurement approaches (Bland & Altman 1986).
+
+    Args:
+        map_a: first T₁/T₂ map (e.g., method A or ground truth).
+        map_b: second T₁/T₂ map (e.g., method B or fitted estimate).
+
+    Returns:
+        BlandAltmanT1T2 with separate results for T1 and T2.
+
+    Raises:
+        ValueError: if the maps share fewer than 2 depth points.
+    """
+    n = min(len(map_a.depths_mm), len(map_b.depths_mm))
+    if n < 2:
+        raise ValueError(
+            f"Bland-Altman requires at least 2 paired observations, got {n}."
+        )
+
+    t1_ba = _bland_altman_single(map_a.t1_s[:n], map_b.t1_s[:n])
+    t2_ba = _bland_altman_single(map_a.t2_s[:n], map_b.t2_s[:n])
+    return BlandAltmanT1T2(t1=t1_ba, t2=t2_ba)
+
+
+def _bland_altman_single(
+    a: NDArray[np.float64],
+    b: NDArray[np.float64],
+) -> BlandAltmanResult:
+    """Bland–Altman for a single parameter array pair."""
+    diffs = a - b
+    means = (a + b) / 2.0
+    bias = float(np.mean(diffs))
+    std_diff = float(np.std(diffs, ddof=1))
+    return BlandAltmanResult(
+        bias=bias,
+        std_diff=std_diff,
+        lower_loa=bias - 1.96 * std_diff,
+        upper_loa=bias + 1.96 * std_diff,
+        means=means,
+        diffs=diffs,
+        n_points=len(a),
     )
 
 

@@ -19,12 +19,15 @@ import pytest
 
 from nv_maser.physics.t1t2_estimator import (
     AbnormalityFlag,
+    BlandAltmanResult,
+    BlandAltmanT1T2,
     T1FitResult,
     T1MapResult,
     T1T2CrossValidation,
     T1T2Map,
     T2FitResult,
     T2MapResult,
+    bland_altman_t1t2,
     build_t1t2_map,
     cross_validate_t1t2,
     detect_tissue_abnormalities,
@@ -482,3 +485,89 @@ class TestCrossValidateT1T2:
         m = build_t1t2_map(two_layer_phantom, depth_step_mm=1.0)
         result = cross_validate_t1t2(m, m)
         assert result.t2_correlation == pytest.approx(1.0, abs=1e-6)
+
+
+class TestBlandAltmanT1T2:
+    """Tests for bland_altman_t1t2()."""
+
+    @pytest.fixture
+    def muscle_map(self):
+        return build_t1t2_map(
+            [TissueLayer("muscle", thickness_mm=5.0, t1_ms=600, t2_ms=35)],
+            depth_step_mm=1.0,
+        )
+
+    @pytest.fixture
+    def fat_map(self):
+        return build_t1t2_map(
+            [TissueLayer("fat", thickness_mm=5.0, t1_ms=250, t2_ms=80)],
+            depth_step_mm=1.0,
+        )
+
+    def test_returns_correct_type(self, muscle_map):
+        result = bland_altman_t1t2(muscle_map, muscle_map)
+        assert isinstance(result, BlandAltmanT1T2)
+        assert isinstance(result.t1, BlandAltmanResult)
+        assert isinstance(result.t2, BlandAltmanResult)
+
+    def test_identical_maps_zero_bias(self, muscle_map):
+        """Comparing a map with itself: bias = 0, std_diff = 0."""
+        result = bland_altman_t1t2(muscle_map, muscle_map)
+        assert result.t1.bias == pytest.approx(0.0, abs=1e-12)
+        assert result.t2.bias == pytest.approx(0.0, abs=1e-12)
+        assert result.t1.std_diff == pytest.approx(0.0, abs=1e-12)
+        assert result.t2.std_diff == pytest.approx(0.0, abs=1e-12)
+
+    def test_identical_maps_loa_at_zero(self, muscle_map):
+        """Identical maps: limits of agreement collapse to 0."""
+        result = bland_altman_t1t2(muscle_map, muscle_map)
+        assert result.t1.lower_loa == pytest.approx(0.0, abs=1e-12)
+        assert result.t1.upper_loa == pytest.approx(0.0, abs=1e-12)
+
+    def test_different_maps_nonzero_bias(self, muscle_map, fat_map):
+        """Comparing muscle vs fat should show a non-zero T2 bias."""
+        result = bland_altman_t1t2(muscle_map, fat_map)
+        # muscle T2 ≈ 0.035 s, fat T2 ≈ 0.080 s → diff = -0.045
+        assert result.t2.bias < 0  # muscle reads lower than fat
+
+    def test_loa_bracket_bias(self, muscle_map, fat_map):
+        """Lower LoA ≤ bias ≤ upper LoA."""
+        result = bland_altman_t1t2(muscle_map, fat_map)
+        for ba in [result.t1, result.t2]:
+            assert ba.lower_loa <= ba.bias <= ba.upper_loa
+
+    def test_n_points_matches_depths(self, muscle_map):
+        result = bland_altman_t1t2(muscle_map, muscle_map)
+        assert result.t1.n_points == len(muscle_map.depths_mm)
+
+    def test_means_and_diffs_arrays(self, muscle_map, fat_map):
+        """means and diffs arrays have correct length."""
+        result = bland_altman_t1t2(muscle_map, fat_map)
+        n = min(len(muscle_map.depths_mm), len(fat_map.depths_mm))
+        assert len(result.t2.means) == n
+        assert len(result.t2.diffs) == n
+
+    def test_means_formula(self, muscle_map, fat_map):
+        """means = (A + B) / 2."""
+        result = bland_altman_t1t2(muscle_map, fat_map)
+        n = min(len(muscle_map.depths_mm), len(fat_map.depths_mm))
+        expected = (muscle_map.t2_s[:n] + fat_map.t2_s[:n]) / 2.0
+        np.testing.assert_allclose(result.t2.means, expected)
+
+    def test_diffs_formula(self, muscle_map, fat_map):
+        """diffs = A - B."""
+        result = bland_altman_t1t2(muscle_map, fat_map)
+        n = min(len(muscle_map.depths_mm), len(fat_map.depths_mm))
+        expected = muscle_map.t2_s[:n] - fat_map.t2_s[:n]
+        np.testing.assert_allclose(result.t2.diffs, expected)
+
+    def test_too_few_depths_raises(self):
+        """Fewer than 2 shared depths should raise ValueError."""
+        tiny_map = build_t1t2_map(
+            [TissueLayer("skin", thickness_mm=0.5, t1_ms=600, t2_ms=30)],
+            depth_step_mm=1.0,
+        )
+        # Only 0 depths will be generated for a 0.5mm layer with 1mm step.
+        # But let's be safe — if it doesn't raise, the assert will catch it.
+        with pytest.raises(ValueError, match="at least 2"):
+            bland_altman_t1t2(tiny_map, tiny_map)

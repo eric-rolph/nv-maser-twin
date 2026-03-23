@@ -169,6 +169,8 @@ from .t1t2_estimator import (  # noqa: F401
     T1T2Map,
     AbnormalityFlag,
     T1T2CrossValidation,
+    BlandAltmanResult,
+    BlandAltmanT1T2,
     fit_t2_monoexponential,
     fit_t1_saturation_recovery,
     map_t2_from_cpmg,
@@ -176,6 +178,7 @@ from .t1t2_estimator import (  # noqa: F401
     build_t1t2_map,
     detect_tissue_abnormalities,
     cross_validate_t1t2,
+    bland_altman_t1t2,
 )
 from .quantum_noise import (  # noqa: F401
     MaserNoiseResult,
@@ -232,6 +235,18 @@ from .spin_squeezing import (  # noqa: F401
     classify_squeezing_regime,
     compute_spin_squeezing,
     compute_quantum_enhancement,
+)
+from .squeezing_dynamics import (  # noqa: F401
+    OATIdealTrajectory,
+    OATDecoherenceTrajectory,
+    SqueezingFeasibility,
+    oat_xi2_ideal,
+    oat_optimal_time,
+    apply_decoherence,
+    compute_oat_ideal_trajectory,
+    compute_oat_with_decoherence,
+    estimate_oat_chi,
+    compute_squeezing_feasibility,
 )
 from .amplifier import (  # noqa: F401
     SIGMA_2,

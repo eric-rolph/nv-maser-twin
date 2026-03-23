@@ -56,6 +56,7 @@ from ..config import SurfaceCoilConfig
 _MU0 = 4.0 * math.pi * 1e-7  # T·m/A
 _KB = 1.380649e-23  # J/K
 _RHO_CU = 1.68e-8  # copper resistivity at 20 °C (Ω·m)
+_EPS0 = 8.854187817e-12  # vacuum permittivity (F/m)
 
 
 @dataclass(frozen=True)
@@ -172,10 +173,18 @@ def compute_coil_properties(
     else:
         inductance = 0.0
 
-    # Self-resonant frequency (parasitic capacitance estimate)
-    # Very rough: f_sr ≈ 1/(2π√(LC)), C_parasitic ≈ ε₀ × pitch_length
-    # For now, just report a placeholder
-    f_sr = 1.0 / (2 * math.pi * math.sqrt(max(inductance, 1e-15) * 1e-12))
+    # Self-resonant frequency from interwinding parasitic capacitance.
+    # Model: adjacent turns act as parallel wires of length ≈ 2πa.
+    # Capacitance per pair ≈ π ε₀ × perimeter / arccosh(pitch/d_wire).
+    # N-1 pairs in series → C_total = C_pair / (N-1).
+    if inductance > 0 and n >= 2 and d_wire > 0 and a > 0:
+        pitch = (a * 2) / n  # approximate radial pitch of spiral
+        gap_ratio = max(pitch / d_wire, 1.001)  # clamp for arccosh domain
+        c_pair = math.pi * _EPS0 * (2 * math.pi * a) / math.acosh(gap_ratio)
+        c_parasitic = c_pair / (n - 1)
+        f_sr = 1.0 / (2 * math.pi * math.sqrt(inductance * c_parasitic))
+    else:
+        f_sr = float("inf")
 
     return CoilProperties(
         dc_resistance_ohm=r_dc,
