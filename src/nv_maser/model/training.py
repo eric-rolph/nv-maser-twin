@@ -14,7 +14,7 @@ from torch.optim.lr_scheduler import CosineAnnealingLR, StepLR
 from ..config import SimConfig
 from ..physics.environment import FieldEnvironment
 from .controller import build_controller
-from .loss import FieldUniformityLoss, PhysicsInformedLoss
+from .loss import FieldUniformityLoss
 
 
 class Trainer:
@@ -56,20 +56,12 @@ class Trainer:
             device=self.device,
         )
 
-        # Loss function — select based on loss_type config
-        if config.training.loss_type == "physics":
-            self.loss_fn = PhysicsInformedLoss(
-                self.active_mask,
-                self.env,
-                config.training.current_penalty_weight,
-                config.training.gain_budget_penalty_weight,
-                config.training.cooperativity_penalty_weight,
-            ).to(self.device)
-        else:
-            self.loss_fn = FieldUniformityLoss(
-                self.active_mask,
-                config.training.current_penalty_weight,
-            ).to(self.device)
+        # Loss: field variance + current L2 penalty.
+        # Physics penalties (gain budget, cooperativity) are added in _forward_step.
+        self.loss_fn = FieldUniformityLoss(
+            self.active_mask,
+            config.training.current_penalty_weight,
+        ).to(self.device)
 
         # Optimizer
         self.optimizer = torch.optim.AdamW(
@@ -144,6 +136,24 @@ class Trainer:
 
         net_field = batch_field.squeeze(1) + coil_field  # (B, H, W)
         loss, metrics = self.loss_fn(net_field, currents)
+
+        # Physics penalties (non-differentiable scalar offsets, no gradient)
+        if self.config.training.loss_type == "physics":
+            sample_field = net_field[0].detach().cpu().numpy()
+            phys = self.env.compute_uniformity_metric(sample_field)
+            tc = self.config.training
+            gb_penalty = -np.log(max(phys.gain_budget, 1e-20))
+            coop_penalty = max(0.0, 1.0 - phys.cooperativity)
+            physics_term = (
+                tc.gain_budget_penalty_weight * gb_penalty
+                + tc.cooperativity_penalty_weight * coop_penalty
+            )
+            loss = loss + physics_term
+            metrics["gain_budget"] = phys.gain_budget
+            metrics["cooperativity"] = phys.cooperativity
+            metrics["physics_penalty"] = physics_term
+            metrics["total_loss"] = float(loss.detach().cpu())
+
         return loss, metrics
 
     def train(self) -> dict:

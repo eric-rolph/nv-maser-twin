@@ -120,10 +120,10 @@ class ShimmingEnv:
             # to avoid a full ODE/linewidth solve on every step.
             if self._step_count % 10 == 0 or corrected_var < 1e-14:
                 phys = self._env.compute_reward_metrics(corrected)
-                self._last_gain_budget = phys.get("gain_budget", 0.0)
+                self._last_gain_budget = phys["gain_budget"]
                 info["gain_budget"] = self._last_gain_budget
-                info["cooperativity"] = phys.get("cooperativity", 0.0)
-                info["snr_db"] = phys.get("snr_db", 0.0)
+                info["cooperativity"] = phys["cooperativity"]
+                info["snr_db"] = phys["snr_db"]
             else:
                 info["gain_budget"] = getattr(self, "_last_gain_budget", 0.0)
             # Reward shaping: bonus for improving gain budget

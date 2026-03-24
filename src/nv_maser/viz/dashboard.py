@@ -181,14 +181,14 @@ class NVMaserDashboard(QtWidgets.QMainWindow):
         # Compute metrics
         metrics = self.env.compute_uniformity_metric(net_np)
         fps = 1000.0 / max(self.config.viz.update_interval_ms, 1)
-        self._metric_labels["Field Std (μT)"].setText(f"{metrics['std']*1e6:.2f}")
-        self._metric_labels["PPM"].setText(f"{metrics['ppm']:.1f}")
+        self._metric_labels["Field Std (μT)"].setText(f"{metrics.std*1e6:.2f}")
+        self._metric_labels["PPM"].setText(f"{metrics.ppm:.1f}")
         self._metric_labels["Inference (ms)"].setText(f"{infer_ms:.2f}")
         self._metric_labels["FPS"].setText(f"{fps:.0f}")
-        self._metric_labels["SNR (dB)"].setText(f"{metrics.get('snr_db', 0):.1f}")
-        self._metric_labels["Cooperativity"].setText(f"{metrics.get('cooperativity', 0):.3f}")
-        self._metric_labels["Gain Budget"].setText(f"{metrics.get('gain_budget', 0):.3f}")
-        self._metric_labels["Pump Saturation"].setText(f"{metrics.get('pump_saturation', 0):.3f}")
+        self._metric_labels["SNR (dB)"].setText(f"{metrics.snr_db:.1f}")
+        self._metric_labels["Cooperativity"].setText(f"{metrics.cooperativity:.3f}")
+        self._metric_labels["Gain Budget"].setText(f"{metrics.gain_budget:.3f}")
+        self._metric_labels["Pump Saturation"].setText(f"{metrics.pump_saturation:.3f}")
 
         # Update coil bar chart
         self._coil_bars.setOpts(height=currents_np)

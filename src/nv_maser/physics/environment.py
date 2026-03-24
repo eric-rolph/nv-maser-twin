@@ -44,8 +44,9 @@ class UniformityReport:
     """Typed return value from ``FieldEnvironment.compute_uniformity_metric``.
 
     Always-present fields are required; config-gated subsystem fields default
-    to ``None`` (absent).  Supports dict-like access (``report["key"]``,
-    ``"key" in report``, ``report.get()``) for backward compatibility.
+    to ``None`` (absent).  Use attribute access for always-present fields
+    (e.g. ``report.snr_db``); use ``"key" in report`` or ``report.get()``
+    to test or read optional (config-gated) fields.
     """
 
     # --- Basic field statistics (always present) ---
@@ -128,7 +129,7 @@ class UniformityReport:
     smb_cooperativity: float | None = None
     smb_n_bursts: int | None = None
 
-    # ---- dict-like access for backward compatibility ----
+    # ---- dict-like access for optional-field presence checks ----
 
     def __getitem__(self, key: str) -> object:
         val = getattr(self, key, _MISSING)
@@ -143,10 +144,6 @@ class UniformityReport:
     def get(self, key: str, default: object = None) -> object:
         val = getattr(self, key, None)
         return default if val is None else val
-
-    def to_dict(self) -> dict[str, object]:
-        """Return a plain dict, omitting ``None``-valued (absent) fields."""
-        return {k: v for k, v in asdict(self).items() if v is not None}
 
 
 class FieldEnvironment:

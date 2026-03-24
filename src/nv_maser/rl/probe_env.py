@@ -49,7 +49,6 @@ Usage
 """
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -182,8 +181,8 @@ class ProbeShimmingEnv(ShimmingEnv):
         # self._current_field has already been updated by the parent step().
         phys = self._env.compute_uniformity_metric(self._current_field)
 
-        noise_temp_k = phys.get("maser_noise_temperature_k", math.nan)
-        snr_db = phys.get("snr_db", math.nan)
+        noise_temp_k = phys.maser_noise_temperature_k
+        snr_db = phys.snr_db
 
         info["maser_noise_temp_k"] = float(noise_temp_k)
         info["probe_snr_db"] = float(snr_db)

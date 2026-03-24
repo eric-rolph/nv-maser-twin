@@ -13,7 +13,6 @@ import pytest
 
 from nv_maser.config import SimConfig
 from nv_maser.physics.environment import FieldEnvironment
-from nv_maser.model.loss import PhysicsInformedLoss
 from nv_maser.rl.env import ShimmingEnv
 import torch
 
@@ -266,67 +265,70 @@ class TestEndToEndChain:
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# PhysicsInformedLoss integration
+# Trainer physics-loss mode integration
 # ═══════════════════════════════════════════════════════════════════════
 
 
-class TestPhysicsInformedLoss:
-    """Verify the PhysicsInformedLoss computes and returns physics metrics."""
+class TestPhysicsLossTrainer:
+    """Verify Trainer._forward_step includes physics metrics with loss_type='physics'."""
 
-    def test_physics_loss_includes_physics_metrics(self) -> None:
-        """PhysicsInformedLoss output includes gain_budget and cooperativity."""
-        cfg = SimConfig(grid={"size": 16}, disturbance={"seed": 42})
-        env = FieldEnvironment(cfg, thermal_seed=0)
-        mask = torch.tensor(env.grid.active_zone_mask, dtype=torch.bool)
-        loss_fn = PhysicsInformedLoss(mask, env, gain_budget_weight=1e-5)
+    def test_forward_step_includes_physics_metrics(self) -> None:
+        """With loss_type='physics', forward step returns gain_budget and cooperativity."""
+        from nv_maser.model.training import Trainer
 
-        net = torch.randn(2, 16, 16)
-        currents = torch.randn(2, cfg.coils.num_coils)
-        loss, metrics = loss_fn(net, currents)
+        cfg = SimConfig(
+            grid={"size": 16},
+            disturbance={"seed": 42},
+            training={"loss_type": "physics", "gain_budget_penalty_weight": 1e-5},
+        )
+        trainer = Trainer(cfg)
+        field = torch.tensor(trainer.env.step(t=0.0), dtype=torch.float32)
+        batch = field.unsqueeze(0).unsqueeze(0)  # (1, 1, H, W)
+        loss, metrics = trainer._forward_step(batch)
 
         assert "gain_budget" in metrics
         assert "cooperativity" in metrics
         assert "physics_penalty" in metrics
         assert loss.item() > 0
 
-    def test_physics_loss_ge_base_loss(self) -> None:
-        """Physics loss is always ≥ base FieldUniformityLoss (penalties are non-negative)."""
-        from nv_maser.model.loss import FieldUniformityLoss
+    def test_physics_penalty_non_negative(self) -> None:
+        """Physics penalty is always non-negative (both terms are floor-clamped)."""
+        from nv_maser.model.training import Trainer
 
-        cfg = SimConfig(grid={"size": 16}, disturbance={"seed": 42})
-        env = FieldEnvironment(cfg, thermal_seed=0)
-        mask = torch.tensor(env.grid.active_zone_mask, dtype=torch.bool)
+        cfg = SimConfig(
+            grid={"size": 16},
+            disturbance={"seed": 42},
+            training={
+                "loss_type": "physics",
+                "gain_budget_penalty_weight": 1e-5,
+                "cooperativity_penalty_weight": 1e-5,
+            },
+        )
+        trainer = Trainer(cfg)
+        field = torch.tensor(trainer.env.step(t=0.0), dtype=torch.float32)
+        batch = field.unsqueeze(0).unsqueeze(0)
+        _, metrics = trainer._forward_step(batch)
 
-        base_fn = FieldUniformityLoss(mask, 1e-6)
-        phys_fn = PhysicsInformedLoss(mask, env, 1e-6, 1e-5, 1e-5)
-
-        net = torch.randn(2, 16, 16)
-        currents = torch.randn(2, cfg.coils.num_coils)
-
-        base_loss, _ = base_fn(net, currents)
-        phys_loss, _ = phys_fn(net, currents)
-
-        assert phys_loss.item() >= base_loss.item() - 1e-6
+        assert metrics["physics_penalty"] >= 0
 
     def test_physics_penalty_same_order_as_variance(self) -> None:
         """With default weights, physics penalty should be within 100x of field variance."""
-        cfg = SimConfig(grid={"size": 16}, disturbance={"seed": 42})
-        env = FieldEnvironment(cfg, thermal_seed=0)
-        mask = torch.tensor(env.grid.active_zone_mask, dtype=torch.bool)
-        loss_fn = PhysicsInformedLoss(mask, env)
+        from nv_maser.model.training import Trainer
 
-        # Use the actual distorted field (realistic input)
-        net_field = env.step(t=0.0)
-        net = torch.tensor(net_field, dtype=torch.float32).unsqueeze(0)
-        currents = torch.zeros(1, cfg.coils.num_coils)
-        _, metrics = loss_fn(net, currents)
+        cfg = SimConfig(
+            grid={"size": 16},
+            disturbance={"seed": 42},
+            training={"loss_type": "physics"},
+        )
+        trainer = Trainer(cfg)
+        field = torch.tensor(trainer.env.step(t=0.0), dtype=torch.float32)
+        batch = field.unsqueeze(0).unsqueeze(0)
+        _, metrics = trainer._forward_step(batch)
 
         fv = metrics["field_variance"]
         pp = metrics["physics_penalty"]
-        # Physics penalty should be within 2 orders of magnitude of field variance
-        # (not 4+ orders like the old 1/gain_budget formulation)
         assert pp < fv * 100, f"physics_penalty {pp:.4e} >> field_variance {fv:.4e}"
-        assert pp > 0, "physics_penalty should be positive"
+        assert pp > 0
 
 
 # ═══════════════════════════════════════════════════════════════════════

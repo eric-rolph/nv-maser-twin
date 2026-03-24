@@ -215,10 +215,10 @@ def _compute_physics_metrics(corrected_field: np.ndarray) -> dict:
         return {}
     phys = _env.compute_uniformity_metric(corrected_field)
     return {
-        "snr_db": phys.get("snr_db"),
-        "cooperativity": phys.get("cooperativity"),
-        "gain_budget": phys.get("gain_budget"),
-        "masing": phys.get("cooperativity", 0) > 1.0,
+        "snr_db": phys.snr_db,
+        "cooperativity": phys.cooperativity,
+        "gain_budget": phys.gain_budget,
+        "masing": phys.cooperativity > 1.0,
     }
 
 
