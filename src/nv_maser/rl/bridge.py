@@ -29,6 +29,9 @@ from ..config import SimConfig, ModelConfig, ModelArchitecture, CoilConfig
 from ..model.controller import build_controller
 from .ppo import ActorCritic
 
+# ModelArchitecture enum is stored in PPO checkpoints via sim_config.model_dump()
+torch.serialization.add_safe_globals([ModelArchitecture])
+
 
 def load_ppo_controller(
     checkpoint_path: str | Path,
@@ -45,9 +48,7 @@ def load_ppo_controller(
     Returns:
         Callable that maps ``(H, W) field → (num_coils,) currents``.
     """
-    # SECURITY: weights_only=False is required — PPO checkpoints store
-    # sim_config dict alongside model weights for reproducibility.
-    data = torch.load(checkpoint_path, weights_only=False, map_location="cpu")
+    data = torch.load(checkpoint_path, weights_only=True, map_location="cpu")
 
     if sim_config is None:
         sim_config = SimConfig(**data["sim_config"])
@@ -87,9 +88,7 @@ def load_supervised_controller(
     Returns:
         Callable that maps ``(H, W) field → (num_coils,) currents``.
     """
-    # SECURITY: weights_only=False required — supervised checkpoints may
-    # contain optimizer state and metadata beyond bare tensors.
-    data = torch.load(checkpoint_path, weights_only=False, map_location="cpu")
+    data = torch.load(checkpoint_path, weights_only=True, map_location="cpu")
 
     model = build_controller(config.grid.size, config.model, config.coils)
     model.load_state_dict(data["model_state"])
@@ -135,8 +134,7 @@ def validate_policy_closed_loop(
         raise ValueError(f"Unknown policy_type: {policy_type!r}")
 
     if config is None:
-        # SECURITY: weights_only=False required — checkpoint stores sim_config.
-        data = torch.load(checkpoint_path, weights_only=False, map_location="cpu")
+        data = torch.load(checkpoint_path, weights_only=True, map_location="cpu")
         config = SimConfig(**data["sim_config"])
 
     sim = ClosedLoopSimulator(config, controller_fn, seed=seed)

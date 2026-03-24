@@ -119,7 +119,7 @@ class ShimmingEnv:
             # Gate: only call the expensive physics metric every 10 steps
             # to avoid a full ODE/linewidth solve on every step.
             if self._step_count % 10 == 0 or corrected_var < 1e-14:
-                phys = self._env.compute_uniformity_metric(corrected)
+                phys = self._env.compute_reward_metrics(corrected)
                 self._last_gain_budget = phys.get("gain_budget", 0.0)
                 info["gain_budget"] = self._last_gain_budget
                 info["cooperativity"] = phys.get("cooperativity", 0.0)

@@ -27,6 +27,11 @@ class SpatialGrid:
         self.x, self.y = np.meshgrid(axis, axis, indexing="xy")
         # Precompute radial distance from center (used by coils)
         self.r = np.sqrt(self.x**2 + self.y**2)
+        # Precompute active zone mask (extent and active_fraction are immutable)
+        half_active = (self.extent * self.active_fraction) / 2.0
+        self._active_zone_mask: NDArray[np.bool_] = (
+            (np.abs(self.x) <= half_active) & (np.abs(self.y) <= half_active)
+        )
 
     @property
     def shape(self) -> tuple[int, int]:
@@ -39,8 +44,7 @@ class SpatialGrid:
 
         The active zone is where we care about field uniformity.
         """
-        half_active = (self.extent * self.active_fraction) / 2.0
-        return (np.abs(self.x) <= half_active) & (np.abs(self.y) <= half_active)
+        return self._active_zone_mask
 
     @property
     def num_active_points(self) -> int:

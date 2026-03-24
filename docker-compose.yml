@@ -8,7 +8,20 @@ services:
       - ./checkpoints:/app/checkpoints:ro   # mount trained model weights read-only
     environment:
       - PYTHONUNBUFFERED=1
+      - NV_MASER_API_KEY=${NV_MASER_API_KEY}
     restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "2"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s

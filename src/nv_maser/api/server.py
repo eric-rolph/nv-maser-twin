@@ -117,6 +117,8 @@ async def lifespan(app: FastAPI):
         _config.model.architecture.value,
         "loaded" if ckpt.exists() else "random-init",
     )
+    if not _API_KEY:
+        logger.warning("NV_MASER_API_KEY not set — authentication disabled")
     yield
     # Teardown (nothing needed)
 
@@ -326,7 +328,7 @@ async def metrics() -> str:
         f"nv_maser_shim_latency_ms_avg {avg_lat:.4f}",
         "# HELP nv_maser_arch Architecture in use",
         "# TYPE nv_maser_arch gauge",
-        f'nv_maser_arch{{arch="{_config.model.architecture.value if _config else "unknown"}"}}1',
+        f'nv_maser_arch{{arch="{_config.model.architecture.value if _config else "unknown"}"}} 1',
         "# HELP nv_maser_coils Number of shimming coils",
         "# TYPE nv_maser_coils gauge",
         f"nv_maser_coils {_config.coils.num_coils if _config else 0}",

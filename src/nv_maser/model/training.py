@@ -292,7 +292,7 @@ def load_checkpoint_meta(checkpoint_path: "str | Path") -> dict:
     ckpt = Path(checkpoint_path)
     if not ckpt.exists():
         raise FileNotFoundError(f"Checkpoint not found: {ckpt}")
-    saved = torch.load(ckpt, map_location="cpu", weights_only=False)  # SECURITY: needs 'meta' dict
+    saved = torch.load(ckpt, map_location="cpu", weights_only=True)
     if "meta" in saved:
         return dict(saved["meta"])
     # Fallback: infer minimal info from state dict

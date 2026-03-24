@@ -42,6 +42,8 @@ The twin includes a full physics stack (NV spin dynamics, optical pump, thermal 
 
 ## Architecture
 
+> See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for Mermaid diagrams, data flow, and the full module map.
+
 ```
 src/nv_maser/
 ├── config.py               Pydantic SimConfig — all tunable parameters

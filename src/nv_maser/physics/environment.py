@@ -4,7 +4,7 @@ This is the main interface for the training loop and visualization.
 """
 from __future__ import annotations
 
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 
 import numpy as np
 from numpy.typing import NDArray
@@ -35,6 +35,118 @@ from .spectral import (
 )
 from .dipolar import estimate_dipolar_coupling_hz, estimate_refilling_time_us
 from .spectral_maxwell_bloch import solve_spectral_maxwell_bloch
+
+_MISSING = object()
+
+
+@dataclass(frozen=True)
+class UniformityReport:
+    """Typed return value from ``FieldEnvironment.compute_uniformity_metric``.
+
+    Always-present fields are required; config-gated subsystem fields default
+    to ``None`` (absent).  Supports dict-like access (``report["key"]``,
+    ``"key" in report``, ``report.get()``) for backward compatibility.
+    """
+
+    # --- Basic field statistics (always present) ---
+    variance: float
+    std: float
+    ppm: float
+    max_deviation: float
+
+    # --- Maser metrics (always present, from MaserMetrics) ---
+    gain_budget: float
+    gamma_h_ghz: float
+    gamma_inh_ghz: float
+    gamma_eff_ghz: float
+    transition_freq_mean_ghz: float
+    transition_freq_spread_ghz: float
+    b_std_tesla: float
+    b_ptp_tesla: float
+    maser_margin: float
+    masing: bool
+
+    # --- Optical pump (always present) ---
+    pump_rate_hz: float
+    pump_saturation: float
+    effective_pump_efficiency: float
+    thermal_load_w: float
+
+    # --- Signal chain (always present) ---
+    snr_db: float
+    received_power_w: float
+    total_noise_w: float
+    system_noise_temperature_k: float
+
+    # --- Cavity QED threshold (always present) ---
+    cooperativity: float
+    threshold_margin: float
+    n_effective: float
+    ensemble_coupling_hz: float
+
+    # --- Derived (always present) ---
+    q_magnetic: float
+    spectral_overlap_R: float
+    maser_noise_temperature_k: float
+
+    # --- Thermal (config-gated) ---
+    temperature_c: float | None = None
+    b0_shift_tesla: float | None = None
+
+    # --- Q-boost (config-gated) ---
+    q_boost_effective_q: float | None = None
+    q_boost_gain: float | None = None
+
+    # --- Depth-resolved pump (config-gated) ---
+    pump_front_back_ratio: float | None = None
+
+    # --- Pulsed pump (config-gated) ---
+    pulsed_peak_inversion: float | None = None
+    pulsed_mean_inversion: float | None = None
+    pulsed_duty_cycle: float | None = None
+    pulsed_equivalent_cw_power_w: float | None = None
+
+    # --- Maxwell-Bloch (config-gated) ---
+    mb_output_power_w: float | None = None
+    mb_steady_state_photons: float | None = None
+    mb_cooperativity: float | None = None
+    mb_gain_db: float | None = None
+    mb_analytical_power_w: float | None = None
+
+    # --- Spectral dynamics (config-gated) ---
+    spectral_on_resonance_inversion: float | None = None
+    spectral_inhomogeneous_linewidth_mhz: float | None = None
+
+    # --- Dipolar interactions (config-gated) ---
+    dipolar_coupling_hz: float | None = None
+    dipolar_refilling_time_us: float | None = None
+
+    # --- Spectral Maxwell-Bloch (config-gated) ---
+    smb_output_power_w: float | None = None
+    smb_steady_state_photons: float | None = None
+    smb_on_res_inversion: float | None = None
+    smb_cooperativity: float | None = None
+    smb_n_bursts: int | None = None
+
+    # ---- dict-like access for backward compatibility ----
+
+    def __getitem__(self, key: str) -> object:
+        val = getattr(self, key, _MISSING)
+        if val is _MISSING or val is None:
+            raise KeyError(key)
+        return val
+
+    def __contains__(self, key: str) -> bool:
+        val = getattr(self, key, _MISSING)
+        return val is not _MISSING and val is not None
+
+    def get(self, key: str, default: object = None) -> object:
+        val = getattr(self, key, None)
+        return default if val is None else val
+
+    def to_dict(self) -> dict[str, object]:
+        """Return a plain dict, omitting ``None``-valued (absent) fields."""
+        return {k: v for k, v in asdict(self).items() if v is not None}
 
 
 class FieldEnvironment:
@@ -122,18 +234,13 @@ class FieldEnvironment:
 
     def compute_uniformity_metric(
         self, net_field: NDArray[np.float32]
-    ) -> dict[str, float]:
+    ) -> UniformityReport:
         """
         Compute field uniformity metrics over the active zone.
 
         When thermal state is available, uses temperature-adjusted T2* and Q.
 
-        Returns dict with:
-            - variance: Var(B) over active zone (the primary loss target)
-            - std: std(B) over active zone in Tesla
-            - ppm: peak-to-peak homogeneity in ppm
-            - max_deviation: max |B - B₀| over active zone
-            - temperature_c: current temperature (if thermal active)
+        Returns a :class:`UniformityReport` (supports dict-like access).
         """
         mask = self.grid.active_zone_mask
         active = net_field[mask]
@@ -306,7 +413,43 @@ class FieldEnvironment:
             result["smb_cooperativity"] = smb_result.cooperativity
             result["smb_n_bursts"] = smb_result.n_bursts
 
-        return result
+        return UniformityReport(**result)
+
+    def compute_reward_metrics(
+        self, net_field: NDArray[np.float32]
+    ) -> dict[str, float]:
+        """Lightweight physics metrics for RL reward shaping.
+
+        Computes only gain_budget, cooperativity, and snr_db — skipping
+        thermal, Q-boost, depth-resolved pump, pulsed pump, Maxwell-Bloch,
+        spectral, and dipolar subsystems.
+        """
+        mask = self.grid.active_zone_mask
+        nv_config = self.config.nv
+        maser_config = self.config.maser
+
+        maser = compute_maser_metrics(net_field, mask, nv_config, maser_config)
+        pump = compute_pump_state(self.config.optical_pump, nv_config)
+
+        nv_config = nv_config.model_copy(
+            update={"pump_efficiency": pump.effective_pump_efficiency}
+        )
+
+        snr_budget = compute_signal_chain_budget(
+            nv_config, maser_config, self.config.signal_chain, maser.gain_budget
+        )
+
+        gamma_eff_hz = maser.gamma_eff_ghz * 1e9
+        threshold = compute_full_threshold(
+            nv_config, maser_config, self.config.cavity,
+            maser.gain_budget, gamma_eff_hz,
+        )
+
+        return {
+            "gain_budget": maser.gain_budget,
+            "cooperativity": threshold.cooperativity,
+            "snr_db": snr_budget.snr_db,
+        }
 
     def generate_training_data(
         self, num_samples: int
