@@ -420,7 +420,7 @@ The simulation is validated against published experimental values from the four 
 
 Additionally, `TestCrossSolverConsistency` in `test_spectral_maxwell_bloch.py` verifies that the frequency-resolved spectral solver reduces to the scalar Maxwell-Bloch solver in the monochromatic limit (cooperativity exact match, photon number within 30%).
 
-> **Note on `PhysicsInformedLoss`**: The gain-budget and cooperativity penalty terms are computed via NumPy and added as non-differentiable scalar offsets. No gradients flow through the physics — they act as adaptive loss weighting per batch. See the class docstring in `src/nv_maser/model/loss.py` for details.
+> **Note on physics penalties**: When `loss_type = "physics"`, `Trainer._forward_step` computes gain-budget and cooperativity penalties via NumPy and adds them as non-differentiable scalar offsets to the field-uniformity loss. No gradients flow through the physics terms — they act as adaptive loss weighting per batch.
 
 ---
 
