@@ -83,9 +83,7 @@ from .cavity import (
 
 
 # ── Physical constants ────────────────────────────────────────────
-_HBAR = 1.054571817e-34   # J·s
-_KB = 1.380649e-23         # J/K
-_MU0 = 1.2566370614e-6    # H/m  (= 4π × 10⁻⁷)
+from .constants import HBAR as _HBAR, KB as _KB, MU0 as _MU0
 _GAMMA_E_RAD = 2 * math.pi * 28.025e9  # rad/s/T  (angular gyromagnetic ratio)
 
 # Transition matrix element for S=1 driven by linearly polarized B₁ ⊥ B₀.

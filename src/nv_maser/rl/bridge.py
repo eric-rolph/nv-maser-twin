@@ -45,6 +45,8 @@ def load_ppo_controller(
     Returns:
         Callable that maps ``(H, W) field → (num_coils,) currents``.
     """
+    # SECURITY: weights_only=False is required — PPO checkpoints store
+    # sim_config dict alongside model weights for reproducibility.
     data = torch.load(checkpoint_path, weights_only=False, map_location="cpu")
 
     if sim_config is None:
@@ -85,6 +87,8 @@ def load_supervised_controller(
     Returns:
         Callable that maps ``(H, W) field → (num_coils,) currents``.
     """
+    # SECURITY: weights_only=False required — supervised checkpoints may
+    # contain optimizer state and metadata beyond bare tensors.
     data = torch.load(checkpoint_path, weights_only=False, map_location="cpu")
 
     model = build_controller(config.grid.size, config.model, config.coils)
@@ -131,6 +135,7 @@ def validate_policy_closed_loop(
         raise ValueError(f"Unknown policy_type: {policy_type!r}")
 
     if config is None:
+        # SECURITY: weights_only=False required — checkpoint stores sim_config.
         data = torch.load(checkpoint_path, weights_only=False, map_location="cpu")
         config = SimConfig(**data["sim_config"])
 

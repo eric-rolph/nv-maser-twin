@@ -80,8 +80,7 @@ from .cavity import CavityProperties
 from .maxwell_bloch import MaxwellBlochResult
 
 # ── Physical constants ─────────────────────────────────────────────
-_HBAR = 1.054571817e-34   # J·s
-_KB   = 1.380649e-23      # J/K
+from .constants import HBAR as _HBAR, KB as _KB
 
 
 # ── Result containers ──────────────────────────────────────────────

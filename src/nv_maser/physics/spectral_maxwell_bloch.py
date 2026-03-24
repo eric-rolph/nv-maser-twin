@@ -69,7 +69,7 @@ from .spectral import (
 )
 
 # ── Physical constants ────────────────────────────────────────────
-_HBAR = 1.054571817e-34  # J·s
+from .constants import HBAR as _HBAR
 
 
 @dataclass(frozen=True)

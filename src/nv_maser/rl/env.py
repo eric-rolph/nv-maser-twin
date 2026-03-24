@@ -116,13 +116,18 @@ class ShimmingEnv:
         # Optional physics reward shaping: add gain_budget improvement
         info: dict[str, float] = {"variance": corrected_var}
         if self.config.training.reward_shaping:
-            phys = self._env.compute_uniformity_metric(corrected)
-            gain_budget = phys.get("gain_budget", 0.0)
-            info["gain_budget"] = gain_budget
-            info["cooperativity"] = phys.get("cooperativity", 0.0)
-            info["snr_db"] = phys.get("snr_db", 0.0)
+            # Gate: only call the expensive physics metric every 10 steps
+            # to avoid a full ODE/linewidth solve on every step.
+            if self._step_count % 10 == 0 or corrected_var < 1e-14:
+                phys = self._env.compute_uniformity_metric(corrected)
+                self._last_gain_budget = phys.get("gain_budget", 0.0)
+                info["gain_budget"] = self._last_gain_budget
+                info["cooperativity"] = phys.get("cooperativity", 0.0)
+                info["snr_db"] = phys.get("snr_db", 0.0)
+            else:
+                info["gain_budget"] = getattr(self, "_last_gain_budget", 0.0)
             # Reward shaping: bonus for improving gain budget
-            reward += self.config.training.reward_shaping_weight * gain_budget
+            reward += self.config.training.reward_shaping_weight * info["gain_budget"]
 
         self._step_count += 1
         terminated = self._step_count >= self.max_steps

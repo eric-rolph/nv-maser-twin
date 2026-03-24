@@ -45,7 +45,7 @@ from dataclasses import dataclass, field
 
 # ── Physical constants ────────────────────────────────────────────
 _T0 = 290.0  # IEEE reference temperature (K)
-_KB = 1.380649e-23  # Boltzmann constant (J/K)
+from .constants import KB as _KB
 
 
 # ╔══════════════════════════════════════════════════════════════════╗

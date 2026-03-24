@@ -30,8 +30,7 @@ from ..config import CavityConfig, MaserConfig, NVConfig
 
 
 # ── Physical constants ────────────────────────────────────────────
-_HBAR = 1.054571817e-34  # J·s
-_MU0 = 1.2566370614e-6  # H/m  (vacuum permeability)
+from .constants import HBAR as _HBAR, MU0 as _MU0
 _C = 2.99792458e8  # m/s
 
 

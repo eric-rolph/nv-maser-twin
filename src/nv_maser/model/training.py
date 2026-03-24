@@ -277,7 +277,7 @@ class Trainer:
     def load_best(self) -> None:
         """Load the best checkpoint."""
         ckpt_path = Path(self.config.training.checkpoint_dir) / "best.pt"
-        checkpoint = torch.load(ckpt_path, map_location=self.device)
+        checkpoint = torch.load(ckpt_path, map_location=self.device, weights_only=True)
         self.model.load_state_dict(checkpoint["model_state"])
         print(f"[Trainer] Loaded best model from epoch {checkpoint['epoch']+1}")
 
@@ -292,7 +292,7 @@ def load_checkpoint_meta(checkpoint_path: "str | Path") -> dict:
     ckpt = Path(checkpoint_path)
     if not ckpt.exists():
         raise FileNotFoundError(f"Checkpoint not found: {ckpt}")
-    saved = torch.load(ckpt, map_location="cpu", weights_only=False)
+    saved = torch.load(ckpt, map_location="cpu", weights_only=False)  # SECURITY: needs 'meta' dict
     if "meta" in saved:
         return dict(saved["meta"])
     # Fallback: infer minimal info from state dict

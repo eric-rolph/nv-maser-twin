@@ -236,6 +236,6 @@ class ClosedLoopSimulator:
             sensor_readings=sensor_readings,
             field_variance=var_b,
             field_std=std_b,
-            gain_budget=maser["gain_budget"],
-            masing=maser["masing"],
+            gain_budget=maser.gain_budget,
+            masing=maser.masing,
         )

@@ -4,6 +4,8 @@ This is the main interface for the training loop and visualization.
 """
 from __future__ import annotations
 
+from dataclasses import asdict
+
 import numpy as np
 from numpy.typing import NDArray
 
@@ -170,7 +172,7 @@ class FieldEnvironment:
             "std": std_b,
             "ppm": ppm,
             "max_deviation": max_dev,
-            **maser,
+            **asdict(maser),
         }
 
         if self._thermal_state is not None:
@@ -217,7 +219,7 @@ class FieldEnvironment:
         )
 
         # Signal chain SNR budget (now uses dynamic pump efficiency)
-        gain_budget = maser["gain_budget"]
+        gain_budget = maser.gain_budget
         snr_budget = compute_signal_chain_budget(
             nv_config, maser_config, self.config.signal_chain, gain_budget
         )
@@ -227,7 +229,7 @@ class FieldEnvironment:
         result["system_noise_temperature_k"] = snr_budget.system_noise_temperature_k
 
         # Cavity QED threshold (now uses dynamic pump efficiency)
-        gamma_eff_hz = maser["gamma_eff_ghz"] * 1e9  # GHz → Hz
+        gamma_eff_hz = maser.gamma_eff_ghz * 1e9  # GHz → Hz
         threshold = compute_full_threshold(
             nv_config, maser_config, self.config.cavity,
             gain_budget, gamma_eff_hz,

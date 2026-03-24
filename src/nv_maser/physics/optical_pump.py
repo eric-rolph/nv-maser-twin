@@ -31,7 +31,7 @@ from ..config import NVConfig, OpticalPumpConfig
 
 
 # ── Physical constants ────────────────────────────────────────────
-_HBAR = 1.054571817e-34  # J·s
+from .constants import HBAR as _HBAR
 _C = 2.99792458e8  # m/s
 
 

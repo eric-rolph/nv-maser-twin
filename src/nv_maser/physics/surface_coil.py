@@ -53,8 +53,7 @@ from numpy.typing import NDArray
 from ..config import SurfaceCoilConfig
 
 # ── Physical constants ────────────────────────────────────────────
-_MU0 = 4.0 * math.pi * 1e-7  # T·m/A
-_KB = 1.380649e-23  # J/K
+from .constants import MU0 as _MU0, KB as _KB
 _RHO_CU = 1.68e-8  # copper resistivity at 20 °C (Ω·m)
 _EPS0 = 8.854187817e-12  # vacuum permittivity (F/m)
 

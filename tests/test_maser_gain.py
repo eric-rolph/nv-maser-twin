@@ -63,7 +63,9 @@ def test_gain_budget_decreases_with_noise(nv_config: NVConfig) -> None:
 def test_maser_metrics_keys(
     nv_config: NVConfig, maser_config: MaserConfig
 ) -> None:
-    """metrics dict has all expected keys."""
+    """MaserMetrics dataclass has all expected fields."""
+    from dataclasses import fields as dc_fields
+
     b = np.full((8, 8), 0.05, dtype=np.float32)
     mask = np.ones((8, 8), dtype=bool)
     m = compute_maser_metrics(b, mask, nv_config, maser_config)
@@ -80,7 +82,7 @@ def test_maser_metrics_keys(
         "maser_margin",
         "masing",
     }
-    assert set(m.keys()) == expected_keys
+    assert {f.name for f in dc_fields(m)} == expected_keys
 
 
 def test_uniform_field_is_masing(
@@ -90,9 +92,9 @@ def test_uniform_field_is_masing(
     b = np.full((16, 16), 0.05, dtype=np.float32)
     mask = np.ones((16, 16), dtype=bool)
     m = compute_maser_metrics(b, mask, nv_config, maser_config)
-    assert m["masing"] is True
-    assert m["gain_budget"] == pytest.approx(1.0, abs=1e-3)  # float32
-    assert m["maser_margin"] > 0
+    assert m.masing is True
+    assert m.gain_budget == pytest.approx(1.0, abs=1e-3)  # float32
+    assert m.maser_margin > 0
 
 
 def test_very_noisy_field_not_masing(
@@ -104,9 +106,9 @@ def test_very_noisy_field_not_masing(
     b += rng.normal(0, 1e-3, size=(16, 16)).astype(np.float32)  # 1 mT noise
     mask = np.ones((16, 16), dtype=bool)
     m = compute_maser_metrics(b, mask, nv_config, maser_config)
-    assert m["masing"] is False
-    assert m["maser_margin"] < 0
-    assert m["gain_budget"] < 0.1
+    assert m.masing is False
+    assert m.maser_margin < 0
+    assert m.gain_budget < 0.1
 
 
 def test_transition_freq_at_50mt(
@@ -116,7 +118,7 @@ def test_transition_freq_at_50mt(
     b = np.full((8, 8), 0.05, dtype=np.float32)
     mask = np.ones((8, 8), dtype=bool)
     m = compute_maser_metrics(b, mask, nv_config, maser_config)
-    assert m["transition_freq_mean_ghz"] == pytest.approx(1.46875, abs=0.01)
+    assert m.transition_freq_mean_ghz == pytest.approx(1.46875, abs=0.01)
 
 
 # ── max_tolerable_b_std ────────────────────────────────────────────

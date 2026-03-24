@@ -44,7 +44,7 @@ from ..config import CavityConfig, MaserConfig, MaxwellBlochConfig, NVConfig
 from .cavity import compute_cavity_properties, compute_n_effective
 
 # ── Physical constants ────────────────────────────────────────────
-_HBAR = 1.054571817e-34  # J·s
+from .constants import HBAR as _HBAR
 
 
 @dataclass(frozen=True)
@@ -186,8 +186,8 @@ def solve_maxwell_bloch(
         method=mb_config.solver_method,
         t_eval=t_eval,
         args=(kappa_c, kappa_s, g_ens, gamma, sz0, drive),
-        rtol=1e-8,
-        atol=1e-10,
+        rtol=mb_config.rtol,
+        atol=mb_config.atol,
     )
 
     if not sol.success:

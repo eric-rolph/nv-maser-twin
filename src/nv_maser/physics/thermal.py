@@ -58,11 +58,17 @@ class ThermalState:
 
         Note: inductance is essentially temperature-independent
         (it depends on geometry, not resistivity).
+
+        Returns ``float('inf')`` when resistance is zero (indicating
+        unknown inductance).  Callers that know the inductance should
+        compute L / R directly rather than using this convenience property.
         """
-        # This needs inductance from FeedbackConfig; we store R here
-        # and let the caller combine with L. This property is a convenience
-        # when L is known externally.
-        return float("inf") if self.effective_coil_resistance_ohm == 0 else 0.0
+        if self.effective_coil_resistance_ohm == 0:
+            return float("inf")
+        # Without inductance we cannot return a time constant.
+        # Return inf to signal "not computable" rather than the
+        # misleading 0.0 that was here before.
+        return float("inf")
 
 
 def compute_thermal_state(

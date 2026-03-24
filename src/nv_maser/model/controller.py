@@ -6,10 +6,25 @@ Output: Coil currents — (batch, num_coils) in [-max_current, +max_current]
 """
 from __future__ import annotations
 
+from typing import Protocol, runtime_checkable
+
 import torch
 import torch.nn as nn
 
 from ..config import CoilConfig, ModelConfig
+
+
+@runtime_checkable
+class ShimController(Protocol):
+    """Protocol for all shimming controllers (CNN, MLP, LSTM, RL).
+
+    Any callable that maps a batched field observation to coil currents
+    satisfies this protocol.
+    """
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Map (B, 1, H, W) field tensor → (B, num_coils) currents."""
+        ...
 
 
 def _activation(name: str) -> nn.Module:

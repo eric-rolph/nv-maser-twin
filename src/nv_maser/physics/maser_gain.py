@@ -25,12 +25,30 @@ from __future__ import annotations
 import numpy as np
 from numpy.typing import NDArray
 
+from dataclasses import dataclass
+
 from ..config import NVConfig, MaserConfig
 from .nv_spin import (
     effective_linewidth_ghz,
     homogeneous_linewidth_ghz,
     transition_frequencies,
 )
+
+
+@dataclass(frozen=True)
+class MaserMetrics:
+    """Comprehensive maser performance metrics from a field map."""
+
+    gain_budget: float
+    gamma_h_ghz: float
+    gamma_inh_ghz: float
+    gamma_eff_ghz: float
+    transition_freq_mean_ghz: float
+    transition_freq_spread_ghz: float
+    b_std_tesla: float
+    b_ptp_tesla: float
+    maser_margin: float
+    masing: bool
 
 
 def compute_gain_budget(
@@ -64,21 +82,11 @@ def compute_maser_metrics(
     active_mask: NDArray[np.bool_],
     nv_config: NVConfig,
     maser_config: MaserConfig,
-) -> dict[str, float]:
+) -> MaserMetrics:
     """
     Comprehensive maser performance metrics from a field map.
 
-    Returns dict with:
-        gain_budget              Γ_h / Γ_eff  (0–1)
-        gamma_h_ghz             homogeneous linewidth
-        gamma_inh_ghz           inhomogeneous linewidth from B₀
-        gamma_eff_ghz           total effective linewidth
-        transition_freq_mean_ghz  mean ν− over active zone
-        transition_freq_spread_ghz  std(ν−) over active zone
-        b_std_tesla             σ(B) over active zone
-        b_ptp_tesla             peak-to-peak B variation
-        maser_margin            (gain_budget / min_budget) − 1
-        masing                  bool — above threshold?
+    Returns a frozen MaserMetrics dataclass.
     """
     gamma_eff, gamma_h, gamma_inh = effective_linewidth_ghz(
         b_field, active_mask, nv_config
@@ -99,18 +107,18 @@ def compute_maser_metrics(
     min_budget = maser_config.min_gain_budget
     margin = (gain_budget / min_budget - 1.0) if min_budget > 0 else float("inf")
 
-    return {
-        "gain_budget": gain_budget,
-        "gamma_h_ghz": gamma_h,
-        "gamma_inh_ghz": gamma_inh,
-        "gamma_eff_ghz": gamma_eff,
-        "transition_freq_mean_ghz": float(np.mean(active_nu)),
-        "transition_freq_spread_ghz": float(np.std(active_nu)),
-        "b_std_tesla": b_std,
-        "b_ptp_tesla": b_ptp,
-        "maser_margin": margin,
-        "masing": gain_budget >= min_budget,
-    }
+    return MaserMetrics(
+        gain_budget=gain_budget,
+        gamma_h_ghz=gamma_h,
+        gamma_inh_ghz=gamma_inh,
+        gamma_eff_ghz=gamma_eff,
+        transition_freq_mean_ghz=float(np.mean(active_nu)),
+        transition_freq_spread_ghz=float(np.std(active_nu)),
+        b_std_tesla=b_std,
+        b_ptp_tesla=b_ptp,
+        maser_margin=margin,
+        masing=gain_budget >= min_budget,
+    )
 
 
 def max_tolerable_b_std(nv_config: NVConfig, maser_config: MaserConfig) -> float:

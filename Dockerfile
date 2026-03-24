@@ -7,11 +7,20 @@ RUN pip install --no-cache-dir -e ".[api]"
 
 # Stage 2: runtime — minimal image
 FROM python:3.11-slim AS runtime
+
+# Run as non-root user
+RUN groupadd --gid 1000 appuser && \
+    useradd --uid 1000 --gid appuser --create-home appuser
+
 WORKDIR /app
 COPY --from=builder /usr/local/lib/python3.11 /usr/local/lib/python3.11
 COPY --from=builder /usr/local/bin /usr/local/bin
 COPY --from=builder /app/src /app/src
 COPY --from=builder /app/pyproject.toml /app/pyproject.toml
+
+RUN chown -R appuser:appuser /app
+USER appuser
+
 ENV PYTHONUNBUFFERED=1
 EXPOSE 8000
 CMD ["uvicorn", "nv_maser.api.server:app", "--host", "0.0.0.0", "--port", "8000"]

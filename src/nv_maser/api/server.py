@@ -1,12 +1,14 @@
 """FastAPI inference server for real-time field shimming."""
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Security
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.security import APIKeyHeader
 from pydantic import BaseModel, Field
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, PlainTextResponse
 import logging
+import secrets
 import threading
 import numpy as np
 import torch
@@ -101,7 +103,7 @@ async def lifespan(app: FastAPI):
 
     ckpt = pathlib.Path("checkpoints/best.pt")
     if ckpt.exists():
-        saved = torch.load(ckpt, map_location="cpu")
+        saved = torch.load(ckpt, map_location="cpu", weights_only=True)
         # Support both bare state-dicts and training checkpoints
         # (training checkpoints have keys: epoch, model_state, optimizer_state, val_loss)
         state_dict = saved.get("model_state", saved) if isinstance(saved, dict) else saved
@@ -125,7 +127,45 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost", "http://localhost:8000", "http://127.0.0.1:8000"],
     allow_methods=["GET", "POST"],
-    allow_headers=["Content-Type"],
+    allow_headers=["Content-Type", "X-API-Key"],
+)
+
+# ── API key authentication ──────────────────────────────────────
+_API_KEY = _os.environ.get("NV_MASER_API_KEY", "")
+_api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+
+async def _verify_api_key(api_key: str | None = Security(_api_key_header)) -> str | None:
+    """Verify API key when NV_MASER_API_KEY is set; skip when unset."""
+    if not _API_KEY:
+        return None  # Auth disabled — no key configured
+    if not api_key or not secrets.compare_digest(api_key, _API_KEY):
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")
+    return api_key
+
+
+# ── Rate limiter (simple token bucket) ──────────────────────────
+class _RateLimiter:
+    def __init__(self, max_rpm: int = 300):
+        self._lock = threading.Lock()
+        self._max = max_rpm
+        self._tokens = float(max_rpm)
+        self._last = time.monotonic()
+
+    def allow(self) -> bool:
+        with self._lock:
+            now = time.monotonic()
+            elapsed = now - self._last
+            self._tokens = min(self._max, self._tokens + elapsed * self._max / 60.0)
+            self._last = now
+            if self._tokens >= 1.0:
+                self._tokens -= 1.0
+                return True
+            return False
+
+
+_rate_limiter = _RateLimiter(
+    max_rpm=int(_os.environ.get("NV_MASER_RATE_LIMIT_RPM", "300"))
 )
 
 MAX_BODY_BYTES = 1 * 1024 * 1024  # 1 MB
@@ -134,8 +174,12 @@ MAX_BODY_BYTES = 1 * 1024 * 1024  # 1 MB
 @app.middleware("http")
 async def limit_request_size(request: Request, call_next):
     content_length = request.headers.get("content-length")
-    if content_length and int(content_length) > MAX_BODY_BYTES:
-        return JSONResponse(status_code=413, content={"detail": "Request body too large"})
+    if content_length:
+        try:
+            if int(content_length) > MAX_BODY_BYTES:
+                return JSONResponse(status_code=413, content={"detail": "Request body too large"})
+        except (ValueError, OverflowError):
+            return JSONResponse(status_code=400, content={"detail": "Invalid Content-Length"})
     return await call_next(request)
 
 
@@ -145,7 +189,16 @@ async def add_security_headers(request: Request, call_next):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Cache-Control"] = "no-store"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'"
+    )
     return response
+
+
+@app.exception_handler(Exception)
+async def _global_exception_handler(request: Request, exc: Exception):
+    logger.exception("Unhandled error on %s %s", request.method, request.url.path)
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
 
 class FieldRequest(BaseModel):
@@ -202,7 +255,9 @@ async def health():
 
 
 @app.post("/shim", response_model=ShimResponse)
-async def shim(req: FieldRequest):
+async def shim(req: FieldRequest, _key: str | None = Security(_verify_api_key)):
+    if not _rate_limiter.allow():
+        raise HTTPException(status_code=429, detail="Rate limit exceeded")
     if _model is None:
         _metrics.record_shim(0.0, error=True)
         raise HTTPException(status_code=503, detail="Model not loaded")
@@ -418,7 +473,7 @@ async def info():
 
 
 @app.post("/reload", response_model=ReloadResponse)
-async def reload_model():
+async def reload_model(_key: str | None = Security(_verify_api_key)):
     """Reload the model checkpoint from disk (hot-reload without server restart)."""
     global _model
     if _model is None or _config is None:
@@ -427,7 +482,7 @@ async def reload_model():
     ckpt = pathlib.Path("checkpoints/best.pt")
     if not ckpt.exists():
         raise HTTPException(status_code=404, detail="No checkpoint found at checkpoints/best.pt")
-    saved = torch.load(ckpt, map_location="cpu")
+    saved = torch.load(ckpt, map_location="cpu", weights_only=True)
     state_dict = saved.get("model_state", saved) if isinstance(saved, dict) else saved
     _model.load_state_dict(state_dict)
     _model.eval()

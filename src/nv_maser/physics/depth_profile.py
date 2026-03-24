@@ -47,8 +47,7 @@ from .single_sided_magnet import SingleSidedMagnet
 from .surface_coil import SurfaceCoil, sensitivity_on_axis
 
 # ── Physical constants ────────────────────────────────────────────
-_KB = 1.380649e-23  # J/K
-_HBAR = 1.054571817e-34  # J·s
+from .constants import KB as _KB, HBAR as _HBAR
 _GAMMA_P = 2.675e8  # proton gyromagnetic ratio (rad/s/T)
 _N_PROTONS_WATER = 6.69e28  # protons per m³ in water
 

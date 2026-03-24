@@ -47,7 +47,7 @@ from .cavity import CavityProperties, ThresholdResult, compute_cavity_properties
 
 
 # ── Physical constants ────────────────────────────────────────────
-_HBAR = 1.054571817e-34  # J·s
+from .constants import HBAR as _HBAR
 
 # ── Regime string constants ───────────────────────────────────────
 BELOW_THRESHOLD: str = "below_threshold"

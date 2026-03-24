@@ -935,6 +935,16 @@ class MaxwellBlochConfig(BaseModel):
         "RK45",
         description="SciPy solve_ivp method: RK45, RK23, DOP853, Radau, BDF, LSODA.",
     )
+    rtol: float = Field(
+        1e-8,
+        gt=0,
+        description="Relative tolerance for the ODE solver.",
+    )
+    atol: float = Field(
+        1e-10,
+        gt=0,
+        description="Absolute tolerance for the ODE solver.",
+    )
 
 
 class SpectralConfig(BaseModel):

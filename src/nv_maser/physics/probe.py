@@ -65,7 +65,7 @@ from .snr_calculator import (
 )
 
 # ── Physical constants ────────────────────────────────────────────
-_MU0 = 4.0 * math.pi * 1e-7     # T·m/A
+from .constants import MU0 as _MU0
 _GAMMA_P_HZ_PER_T = 42.577e6    # proton gyromagnetic ratio (Hz/T)
 
 

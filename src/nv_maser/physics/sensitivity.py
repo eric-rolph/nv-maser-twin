@@ -61,7 +61,7 @@ from .quantum_noise import MaserNoiseResult
 from .signal_chain import SignalChainBudget
 
 # ── Physical constants ─────────────────────────────────────────────────────
-_KB = 1.380649e-23  # J/K
+from .constants import KB as _KB
 _TWO_PI = 2.0 * math.pi
 
 

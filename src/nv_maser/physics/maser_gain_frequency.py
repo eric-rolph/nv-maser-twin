@@ -82,7 +82,7 @@ if TYPE_CHECKING:
 
 
 # ── Physical constants ────────────────────────────────────────────
-_HBAR = 1.054571817e-34  # J·s
+from .constants import HBAR as _HBAR
 
 
 # ── Result dataclasses ────────────────────────────────────────────

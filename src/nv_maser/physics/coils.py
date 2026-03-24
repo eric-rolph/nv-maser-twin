@@ -149,4 +149,5 @@ class ShimCoilArray:
         Returns:
             (B, H, W) coil field tensor.
         """
+        import torch
         return torch.einsum("bc,cij->bij", currents, influence_tensor)

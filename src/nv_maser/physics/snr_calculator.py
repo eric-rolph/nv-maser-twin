@@ -60,10 +60,8 @@ from .up_conversion import MixerSpec, DEFAULT_MIXER, friis_system_temperature_wi
 from .signal_chain import compute_maser_noise_temperature
 
 # ── Physical constants ────────────────────────────────────────────
-_MU0 = 4.0 * math.pi * 1e-7         # T·m/A
-_KB = 1.380649e-23                   # J/K
+from .constants import MU0 as _MU0, KB as _KB, HBAR as _HBAR
 _GAMMA_P = 2.675e8                   # proton gyromagnetic ratio (rad/s/T)
-_HBAR = 1.054571817e-34              # J·s
 _N_PROTONS_WATER = 6.69e28           # proton number density in water (m⁻³)
 _T0 = 290.0                          # IEEE reference temperature (K)
 
