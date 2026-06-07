@@ -1,5 +1,6 @@
 """FastAPI inference server for real-time field shimming."""
 from contextlib import asynccontextmanager
+import asyncio
 from fastapi import FastAPI, HTTPException, Security
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -133,14 +134,20 @@ app.add_middleware(
 )
 
 # ── API key authentication ──────────────────────────────────────
-_API_KEY = _os.environ.get("NV_MASER_API_KEY", "")
+_raw_api_key = _os.environ.get("NV_MASER_API_KEY")
+if _raw_api_key == "":
+    raise RuntimeError(
+        "NV_MASER_API_KEY is set but empty. "
+        "Provide a non-empty key to require authentication, or unset it to disable auth."
+    )
+_API_KEY: str | None = _raw_api_key  # None → auth disabled; non-empty str → required
 _api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 
 async def _verify_api_key(api_key: str | None = Security(_api_key_header)) -> str | None:
     """Verify API key when NV_MASER_API_KEY is set; skip when unset."""
-    if not _API_KEY:
-        return None  # Auth disabled — no key configured
+    if _API_KEY is None:
+        return None  # Auth disabled — NV_MASER_API_KEY not set
     if not api_key or not secrets.compare_digest(api_key, _API_KEY):
         raise HTTPException(status_code=401, detail="Invalid or missing API key")
     return api_key
@@ -182,6 +189,12 @@ async def limit_request_size(request: Request, call_next):
                 return JSONResponse(status_code=413, content={"detail": "Request body too large"})
         except (ValueError, OverflowError):
             return JSONResponse(status_code=400, content={"detail": "Invalid Content-Length"})
+    elif request.method in ("POST", "PUT", "PATCH"):
+        # Chunked transfer-encoding omits Content-Length; read body to enforce limit.
+        # request.body() caches the result so downstream handlers can still read it.
+        body = await request.body()
+        if len(body) > MAX_BODY_BYTES:
+            return JSONResponse(status_code=413, content={"detail": "Request body too large"})
     return await call_next(request)
 
 
@@ -293,12 +306,18 @@ async def shim(req: FieldRequest, _key: str | None = Security(_verify_api_key)):
     with torch.no_grad():
         currents = _model(x).squeeze(0).numpy()
     inference_ms = (time.perf_counter() - t0) * 1000
-    _metrics.record_shim(inference_ms)
 
     # Compute corrected field
     coil_field = _env.coils.compute_field(currents)
     corrected = field + coil_field
     mask = _env.grid.active_zone_mask
+
+    # Run physics metrics in a thread pool — ODE solvers may block O(ms–100ms)
+    loop = asyncio.get_running_loop()
+    phys_metrics = await loop.run_in_executor(None, _compute_physics_metrics, corrected)
+
+    # Record success only after all computation completes
+    _metrics.record_shim(inference_ms)
 
     return ShimResponse(
         currents=currents.tolist(),
@@ -308,7 +327,7 @@ async def shim(req: FieldRequest, _key: str | None = Security(_verify_api_key)):
             np.var(field[mask]) / max(np.var(corrected[mask]), 1e-12)
         ),
         inference_ms=inference_ms,
-        **_compute_physics_metrics(corrected),
+        **phys_metrics,
     )
 
 
@@ -486,8 +505,13 @@ async def reload_model(_key: str | None = Security(_verify_api_key)):
         raise HTTPException(status_code=404, detail="No checkpoint found at checkpoints/best.pt")
     saved = torch.load(ckpt, map_location="cpu", weights_only=True)
     state_dict = saved.get("model_state", saved) if isinstance(saved, dict) else saved
-    _model.load_state_dict(state_dict)
-    _model.eval()
+    # Build the new model completely before swapping the global reference.
+    # This ensures /shim always reads a fully-initialised model (old or new).
+    new_model = build_controller(_config.grid.size, _config.model, _config.coils)
+    new_model.load_state_dict(state_dict)
+    new_model.eval()
+    # Atomic reference swap — CPython GIL makes single assignment atomic
+    _model = new_model
     logger.info("Model reloaded from checkpoint: %s", ckpt)
     return ReloadResponse(
         status="reloaded",

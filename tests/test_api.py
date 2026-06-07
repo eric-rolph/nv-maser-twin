@@ -3,6 +3,7 @@
 Sprint 4 — covers health endpoint, shim endpoint (functional, shape,
 range, schema), wrong-shape 422 error, and random-field correctness.
 """
+import time
 import numpy as np
 import pytest
 from starlette.testclient import TestClient
@@ -72,11 +73,13 @@ def test_shim_currents_shape(client):
 
 
 def test_shim_currents_range(client):
-    """Each current must be within [-1.1, 1.1] (tanh output ≤ 1.0)."""
+    """Each current must be within ±max_current_amps (tanh * max_current_amps)."""
+    from nv_maser.config import SimConfig
+    max_c = SimConfig().coils.max_current_amps
     r = client.post("/shim", json=_make_field())
     assert r.status_code == 200
     for amp in r.json()["currents"]:
-        assert -1.1 <= amp <= 1.1, f"Current {amp} out of expected range"
+        assert -max_c <= amp <= max_c, f"Current {amp} out of ±{max_c} A range"
 
 
 def test_shim_inference_ms_positive(client):
@@ -197,6 +200,40 @@ def test_reload_no_checkpoint(client):
     with patch("pathlib.Path.exists", return_value=False):
         r = client.post("/reload")
     assert r.status_code == 404
+
+
+def test_reload_success(client):
+    """POST /reload succeeds when a valid checkpoint is available."""
+    import torch
+    from unittest.mock import patch
+    from nv_maser.config import SimConfig
+    from nv_maser.model.controller import build_controller
+
+    cfg = SimConfig()
+    state_dict = build_controller(cfg.grid.size, cfg.model, cfg.coils).state_dict()
+    with patch("pathlib.Path.exists", return_value=True), \
+         patch("torch.load", return_value={"model_state": state_dict}):
+        r = client.post("/reload")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "reloaded"
+    assert "arch" in body
+
+
+def test_rate_limiter_fires_429(client):
+    """Exhausting the rate limit token bucket returns HTTP 429."""
+    from nv_maser.api.server import _rate_limiter
+    # Drain the token bucket, then immediately make a request
+    with _rate_limiter._lock:
+        _rate_limiter._tokens = 0.0
+        _rate_limiter._last = time.monotonic()
+    try:
+        r = client.post("/shim", json=_make_field())
+        assert r.status_code == 429
+    finally:
+        # Restore bucket so subsequent tests aren't throttled
+        with _rate_limiter._lock:
+            _rate_limiter._tokens = float(_rate_limiter._max)
 
 
 # ---------------------------------------------------------------------------

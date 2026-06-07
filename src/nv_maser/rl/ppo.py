@@ -59,6 +59,7 @@ class ActorCritic(nn.Module):
         # Extract the shared feature encoder (everything before the final head)
         if hasattr(base, "conv_stack"):
             self.encoder = base.conv_stack
+            self._is_mlp = False
             # Probe encoder output dim
             with torch.no_grad():
                 dummy = torch.zeros(1, 1, grid_size, grid_size)
@@ -67,6 +68,7 @@ class ActorCritic(nn.Module):
             # MLP fallback: use first N-2 layers (before final linear+tanh)
             layers = list(base.network.children())
             self.encoder = nn.Sequential(*layers[:-2])
+            self._is_mlp = True
             with torch.no_grad():
                 dummy = torch.zeros(1, grid_size * grid_size)
                 enc_dim = self.encoder(dummy).shape[1]
@@ -89,7 +91,7 @@ class ActorCritic(nn.Module):
 
     def _encode(self, obs: torch.Tensor) -> torch.Tensor:
         """Shared encoder: obs (B, 1, H, W) → features (B, enc_dim)."""
-        if hasattr(self, "_is_mlp"):
+        if self._is_mlp:
             return self.encoder(obs.view(obs.size(0), -1))
         feat = self.encoder(obs)
         return feat.view(feat.size(0), -1)
@@ -258,6 +260,8 @@ class PPOTrainer:
             self.ac.parameters(), lr=self.ppo_cfg.learning_rate
         )
         self.buffer = RolloutBuffer()
+        self._first_rollout = True
+        self._bootstrap_obs: "np.ndarray | None" = None
 
     def collect_rollout(self) -> float:
         """Collect ``steps_per_rollout`` environment transitions.
@@ -268,7 +272,12 @@ class PPOTrainer:
         self.buffer.clear()
         self.ac.eval()
 
-        obs_np, _ = self.env.reset(seed=self.ppo_cfg.seed)
+        # Seed only the first rollout; subsequent rollouts get fresh random episodes.
+        if self._first_rollout:
+            obs_np, _ = self.env.reset(seed=self.ppo_cfg.seed)
+            self._first_rollout = False
+        else:
+            obs_np, _ = self.env.reset()
         episode_returns: list[float] = []
         ep_reward = 0.0
 
@@ -298,6 +307,11 @@ class PPOTrainer:
             else:
                 obs_np = next_obs_np
 
+        # Store the observation to bootstrap from in update().
+        # When the last step was not done, obs_np == next_obs_np (the state
+        # after the last action). When done, the value is masked to zero anyway.
+        self._bootstrap_obs = obs_np
+
         return float(np.mean(episode_returns)) if episode_returns else ep_reward
 
     def update(self) -> dict[str, float]:
@@ -309,10 +323,16 @@ class PPOTrainer:
         self.ac.train()
         cfg = self.ppo_cfg
 
-        # Bootstrap last value for GAE
-        last_obs = self.buffer.observations[-1]
+        # Bootstrap last value for GAE using the observation *after* the last
+        # buffered action (not the obs before it). When last step was terminal,
+        # GAE masks this value to zero, so correctness only matters for non-terminal.
+        bootstrap_obs = (
+            self._bootstrap_obs
+            if self._bootstrap_obs is not None
+            else self.buffer.observations[-1]
+        )
         with torch.no_grad():
-            last_obs_t = torch.from_numpy(last_obs).unsqueeze(0)
+            last_obs_t = torch.from_numpy(bootstrap_obs).unsqueeze(0)
             _, _, last_val = self.ac(last_obs_t)
             last_value = float(last_val.item())
 

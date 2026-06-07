@@ -12,7 +12,6 @@ import numpy as np
 from numpy.typing import NDArray
 
 from ..config import SimConfig
-from ..physics.disturbance import DisturbanceGenerator
 from ..physics.environment import FieldEnvironment
 
 
@@ -30,9 +29,9 @@ class ShimmingEnv:
     def __init__(self, config: SimConfig | None = None) -> None:
         self.config = config if config is not None else SimConfig()
         self._env = FieldEnvironment(self.config)
-        self._disturbance = DisturbanceGenerator(
-            self._env.grid, self.config.disturbance
-        )
+        # Alias so subclasses (e.g. ProbeShimmingEnv) can access the
+        # disturbance generator directly via self._disturbance.
+        self._disturbance = self._env.disturbance_gen
 
         self.grid_size: int = self.config.grid.size
         self.num_coils: int = self.config.coils.num_coils
@@ -72,14 +71,21 @@ class ShimmingEnv:
         """
         if seed is not None:
             self._rng = np.random.default_rng(seed)
-            # Seed the disturbance generator so reset(seed=x) is reproducible
-            self._disturbance.rng = np.random.default_rng(seed)
+            # Seed the shared disturbance generator for reproducibility
+            self._env.disturbance_gen.rng = np.random.default_rng(seed)
 
-        self._disturbance.randomize()
-        self._current_field = self._disturbance.generate(t=0.0)
+        self._env.disturbance_gen.randomize()
+        # Compute base_field + disturbance directly (no thermal model call) so
+        # that reset(seed=x) is deterministic.  This matches the observation
+        # space used in supervised training and inference (C1 fix).
+        disturbance = self._env.disturbance_gen.generate(t=0.0)
+        self._env._current_disturbance = disturbance  # keep env state consistent
+        self._current_field = (self._env.base_field + disturbance).astype(np.float32)
         # Target is the undistorted base field (ideal B₀)
         self._target_field = self._env.base_field
         self._step_count = 0
+        # Clear per-episode physics cache so stale values don't bleed across episodes.
+        self._last_gain_budget: float = 0.0
 
         obs = self._current_field[np.newaxis, :, :].astype(np.float32)
         return obs, {}
@@ -96,7 +102,8 @@ class ShimmingEnv:
         Returns:
             (obs, reward, terminated, truncated, info)
         """
-        assert self._current_field is not None, "Call reset() before step()"
+        if self._current_field is None:
+            raise RuntimeError("Call reset() before step()")
 
         action = np.clip(
             np.asarray(action, dtype=np.float32),

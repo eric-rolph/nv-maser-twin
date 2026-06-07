@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 import torch
 
-from nv_maser.config import SimConfig
+from nv_maser.config import SimConfig, ModelArchitecture
 from nv_maser.rl.ppo import (
     ActorCritic,
     PPOConfig,
@@ -53,6 +53,19 @@ def test_actor_critic_actions_bounded(actor_critic: ActorCritic) -> None:
     max_c = actor_critic.max_current
     assert action.min() >= -max_c - 1e-6
     assert action.max() <= max_c + 1e-6
+
+
+def test_actor_critic_mlp_forward_shapes() -> None:
+    """MLP ActorCritic must produce correct output shapes and not crash."""
+    cfg = SimConfig()
+    mlp_model_cfg = cfg.model.model_copy(update={"architecture": ModelArchitecture.MLP})
+    cfg = cfg.model_copy(update={"model": mlp_model_cfg})
+    ac = ActorCritic(cfg.grid.size, cfg.model, cfg.coils)
+    obs = torch.zeros(2, 1, GRID_SIZE, GRID_SIZE)
+    action, log_prob, value = ac(obs)
+    assert action.shape == (2, NUM_COILS)
+    assert log_prob.shape == (2,)
+    assert value.shape == (2,)
 
 
 # ═══════════════════════════════════════════════════════════════════════

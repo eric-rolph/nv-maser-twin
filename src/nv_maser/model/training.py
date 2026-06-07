@@ -137,22 +137,25 @@ class Trainer:
         net_field = batch_field.squeeze(1) + coil_field  # (B, H, W)
         loss, metrics = self.loss_fn(net_field, currents)
 
-        # Physics penalties (non-differentiable scalar offsets, no gradient)
+        # Physics metrics (informational logging only — not added to loss).
+        # compute_uniformity_metric returns numpy scalars with no gradient path;
+        # adding them to the PyTorch loss would shift the logged value but leave
+        # gradients unchanged. Use a random batch index to avoid bias from index 0.
         if self.config.training.loss_type == "physics":
-            sample_field = net_field[0].detach().cpu().numpy()
+            idx = int(np.random.randint(0, net_field.shape[0]))
+            sample_field = net_field[idx].detach().cpu().numpy()
             phys = self.env.compute_uniformity_metric(sample_field)
             tc = self.config.training
-            gb_penalty = -np.log(max(phys.gain_budget, 1e-20))
-            coop_penalty = max(0.0, 1.0 - phys.cooperativity)
+            gb_penalty = float(-np.log(max(phys.gain_budget, 1e-20)))
+            coop_penalty = float(max(0.0, 1.0 - phys.cooperativity))
             physics_term = (
                 tc.gain_budget_penalty_weight * gb_penalty
                 + tc.cooperativity_penalty_weight * coop_penalty
             )
-            loss = loss + physics_term
             metrics["gain_budget"] = phys.gain_budget
             metrics["cooperativity"] = phys.cooperativity
             metrics["physics_penalty"] = physics_term
-            metrics["total_loss"] = float(loss.detach().cpu())
+            metrics["total_loss"] = float(loss.detach().cpu()) + physics_term
 
         return loss, metrics
 
