@@ -29,7 +29,7 @@ def run_sweep(
 
     Returns a list of result dicts (arch, lr, best_val_loss).
     """
-    from nv_maser.config import SimConfig, TrainingConfig, ModelConfig, ModelArchitecture
+    from nv_maser.config import ModelArchitecture, SimConfig
     from nv_maser.model.training import Trainer
     from nv_maser.tracking import ExperimentTracker
 

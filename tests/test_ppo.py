@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 import torch
 
-from nv_maser.config import SimConfig, ModelArchitecture
+from nv_maser.config import ModelArchitecture, SimConfig
 from nv_maser.rl.ppo import (
     ActorCritic,
     PPOConfig,

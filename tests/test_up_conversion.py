@@ -1,18 +1,17 @@
 """Tests for up_conversion.py — RF up-conversion mixer model."""
 from __future__ import annotations
 
-import math
 import pytest
 
 from nv_maser.physics.up_conversion import (
-    MixerSpec,
     DEFAULT_MIXER,
-    UpConversionResult,
+    MixerSpec,
     UpConversionNoiseContribution,
-    compute_up_conversion,
-    compute_mixer_noise_contribution,
-    compute_lo_frequency_ghz,
+    UpConversionResult,
     compute_bandwidth_utilization,
+    compute_lo_frequency_ghz,
+    compute_mixer_noise_contribution,
+    compute_up_conversion,
     friis_system_temperature_with_mixer,
 )
 

@@ -79,7 +79,6 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 
-
 # ── Default interference sources modelled ────────────────────────────────────
 # These represent a realistic hospital / urban unshielded environment.
 # Power levels are conservative (pessimistic) figures in dBm received

@@ -3,15 +3,13 @@ Matplotlib static plots for analysis and export.
 """
 from __future__ import annotations
 
-from pathlib import Path
-
-import numpy as np
-import matplotlib.pyplot as plt
 import matplotlib.patches as patches
+import matplotlib.pyplot as plt
+import numpy as np
 from matplotlib.figure import Figure
 
-from ..physics.grid import SpatialGrid
 from ..physics.coils import ShimCoilArray
+from ..physics.grid import SpatialGrid
 
 
 def plot_training_history(

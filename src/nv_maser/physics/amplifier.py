@@ -76,14 +76,14 @@ from ..config import CavityConfig, MaserConfig, NVConfig
 from .cavity import (
     CavityProperties,
     ThresholdResult,
-    compute_cavity_properties,
     compute_effective_q,
-    compute_full_threshold,
 )
 
-
 # ── Physical constants ────────────────────────────────────────────
-from .constants import HBAR as _HBAR, KB as _KB, MU0 as _MU0
+from .constants import HBAR as _HBAR
+from .constants import KB as _KB
+from .constants import MU0 as _MU0
+
 _GAMMA_E_RAD = 2 * math.pi * 28.025e9  # rad/s/T  (angular gyromagnetic ratio)
 
 # Transition matrix element for S=1 driven by linearly polarized B₁ ⊥ B₀.

@@ -15,7 +15,8 @@ your trained controller will actually work on real hardware.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field as dc_field
+from dataclasses import dataclass
+from dataclasses import field as dc_field
 
 import numpy as np
 from numpy.typing import NDArray

@@ -3,7 +3,6 @@
 These tests compare our hand-rolled SingleSidedMagnet analytical
 calculations against magpylib's validated field computations.
 """
-import math
 
 import numpy as np
 import pytest
@@ -30,7 +29,6 @@ from nv_maser.physics.magpylib_adapter import (  # noqa: E402
     field_on_axis_magpylib,
     find_sweet_spot_magpylib,
 )
-
 
 # ── Fixtures ──────────────────────────────────────────────────────
 

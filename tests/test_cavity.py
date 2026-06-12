@@ -5,6 +5,8 @@ import pytest
 
 from nv_maser.config import CavityConfig, MaserConfig, NVConfig
 from nv_maser.physics.cavity import (
+    _HBAR,
+    _MU0,
     CavityProperties,
     MagneticQResult,
     ThresholdResult,
@@ -15,10 +17,7 @@ from nv_maser.physics.cavity import (
     compute_maser_threshold,
     compute_n_effective,
     compute_spectral_overlap,
-    _HBAR,
-    _MU0,
 )
-
 
 # ── Fixtures ──────────────────────────────────────────────────────
 

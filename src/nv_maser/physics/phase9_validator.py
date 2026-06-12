@@ -67,7 +67,6 @@ from .depth_profile import (
 from .single_sided_magnet import SingleSidedMagnet
 from .surface_coil import SurfaceCoil
 
-
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║  Configuration                                                   ║
 # ╚══════════════════════════════════════════════════════════════════╝

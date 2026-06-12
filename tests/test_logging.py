@@ -1,11 +1,8 @@
 """Tests for structured JSON logging in nv_maser.api.server."""
 import json
 import logging
-import os
 
-import pytest
-
-from nv_maser.api.server import _JsonFormatter, _configure_logging
+from nv_maser.api.server import _configure_logging, _JsonFormatter
 
 
 def _make_record(msg: str = "hello", level: int = logging.INFO) -> logging.LogRecord:

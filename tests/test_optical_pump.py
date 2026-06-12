@@ -3,20 +3,18 @@ import math
 
 import pytest
 
-from nv_maser.config import NVConfig, OpticalPumpConfig
+from nv_maser.config import NVConfig, OpticalPumpConfig, SimConfig
+from nv_maser.physics.environment import FieldEnvironment
 from nv_maser.physics.optical_pump import (
-    PumpState,
-    DepthResolvedPumpResult,
-    compute_absorbed_power,
-    compute_pump_rate,
-    compute_pump_state,
-    compute_depth_resolved_pump,
     _C,
     _HBAR,
+    DepthResolvedPumpResult,
+    PumpState,
+    compute_absorbed_power,
+    compute_depth_resolved_pump,
+    compute_pump_rate,
+    compute_pump_state,
 )
-from nv_maser.physics.environment import FieldEnvironment
-from nv_maser.config import SimConfig
-
 
 # ── Fixtures ──────────────────────────────────────────────────────
 

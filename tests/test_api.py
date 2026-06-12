@@ -4,6 +4,7 @@ Sprint 4 — covers health endpoint, shim endpoint (functional, shape,
 range, schema), wrong-shape 422 error, and random-field correctness.
 """
 import time
+
 import numpy as np
 import pytest
 from starlette.testclient import TestClient
@@ -204,8 +205,8 @@ def test_reload_no_checkpoint(client):
 
 def test_reload_success(client):
     """POST /reload succeeds when a valid checkpoint is available."""
-    import torch
     from unittest.mock import patch
+
     from nv_maser.config import SimConfig
     from nv_maser.model.controller import build_controller
 

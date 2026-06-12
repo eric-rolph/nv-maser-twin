@@ -1,8 +1,6 @@
 """Tests for the spectral Maxwell-Bloch solver."""
 from __future__ import annotations
 
-import math
-
 import numpy as np
 import pytest
 
@@ -15,14 +13,13 @@ from nv_maser.config import (
     SpectralConfig,
 )
 from nv_maser.physics.maxwell_bloch import solve_maxwell_bloch
+from nv_maser.physics.spectral import build_detuning_grid
 from nv_maser.physics.spectral_maxwell_bloch import (
     SpectralMBResult,
     _compute_bin_weights,
     _count_bursts,
     solve_spectral_maxwell_bloch,
 )
-from nv_maser.physics.spectral import build_detuning_grid
-
 
 # ── Fixtures ──────────────────────────────────────────────────────
 

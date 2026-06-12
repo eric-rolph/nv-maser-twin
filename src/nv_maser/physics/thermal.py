@@ -24,9 +24,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
-from numpy.typing import NDArray
 
-from ..config import ThermalConfig, NVConfig, MaserConfig, FeedbackConfig, FieldConfig
+from ..config import FeedbackConfig, FieldConfig, MaserConfig, NVConfig, ThermalConfig
 
 
 @dataclass(frozen=True)

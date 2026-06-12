@@ -5,15 +5,15 @@ import numpy as np
 import pytest
 
 from nv_maser.config import (
-    FieldConfig,
-    GridConfig,
     MaserConfig,
     NVConfig,
     SignalChainConfig,
     SimConfig,
 )
-from nv_maser.physics.grid import SpatialGrid
+from nv_maser.physics.environment import FieldEnvironment
 from nv_maser.physics.signal_chain import (
+    _KB,
+    _T0,
     SignalChainBudget,
     compute_amplifier_noise,
     compute_maser_emission_power,
@@ -22,11 +22,7 @@ from nv_maser.physics.signal_chain import (
     compute_signal_chain_budget,
     compute_snr_vs_field_uniformity,
     compute_thermal_noise,
-    _KB,
-    _T0,
 )
-from nv_maser.physics.environment import FieldEnvironment
-
 
 # ── Fixtures ──────────────────────────────────────────────────────
 

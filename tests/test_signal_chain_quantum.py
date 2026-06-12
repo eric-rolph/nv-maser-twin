@@ -19,13 +19,12 @@ from nv_maser.physics.quantum_noise import (
     compute_noise_temperature,
 )
 from nv_maser.physics.signal_chain import (
-    SignalChainBudget,
     _KB,
     _T0,
+    SignalChainBudget,
     compute_friis_system_temperature,
     compute_signal_chain_budget,
 )
-
 
 # ── Shared constants ───────────────────────────────────────────────────────
 
@@ -335,6 +334,7 @@ class TestBackwardCompatibility:
     ) -> None:
         """compute_snr_vs_field_uniformity must still run without modification."""
         import numpy as np
+
         from nv_maser.physics.signal_chain import compute_snr_vs_field_uniformity
 
         b_std = np.linspace(0.0, 1e-4, 5)

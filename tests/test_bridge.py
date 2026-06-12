@@ -6,13 +6,13 @@ import pytest
 import torch
 
 from nv_maser.config import SimConfig
+from nv_maser.model.controller import build_controller
 from nv_maser.rl.bridge import (
     load_ppo_controller,
     load_supervised_controller,
     validate_policy_closed_loop,
 )
-from nv_maser.rl.ppo import ActorCritic, PPOConfig, PPOTrainer
-from nv_maser.model.controller import build_controller
+from nv_maser.rl.ppo import PPOConfig, PPOTrainer
 
 
 @pytest.fixture()

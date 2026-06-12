@@ -9,7 +9,6 @@ import pytest
 from nv_maser.physics.disturbance import ImagingMagnetDisturbanceConfig
 from nv_maser.rl.probe_env import ProbeShimmingConfig, ProbeShimmingEnv
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------

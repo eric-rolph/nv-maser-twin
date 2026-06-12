@@ -1,7 +1,8 @@
 """Tests for checkpoint metadata enrichment and load_checkpoint_meta utility."""
+from pathlib import Path
+
 import pytest
 import torch
-from pathlib import Path
 
 from nv_maser.config import SimConfig
 from nv_maser.model.training import Trainer, load_checkpoint_meta

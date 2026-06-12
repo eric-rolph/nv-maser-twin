@@ -15,7 +15,6 @@ Run with:
 from __future__ import annotations
 
 import sys
-from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import ANY, MagicMock, patch
 
@@ -32,7 +31,6 @@ from nv_maser.main import (
     cmd_visualize_coils,
     main,
 )
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers

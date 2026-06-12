@@ -1,19 +1,16 @@
 """Tests for the pulsed optical pump model (Long et al. 2025)."""
-import math
 
 import numpy as np
 import pytest
 
 from nv_maser.config import NVConfig, OpticalPumpConfig, SimConfig
+from nv_maser.physics.environment import FieldEnvironment
 from nv_maser.physics.pulsed_pump import (
     PulsedPumpResult,
-    pulsed_pump_rate,
-    compute_pulsed_inversion,
     compute_equivalent_cw_power,
+    compute_pulsed_inversion,
+    pulsed_pump_rate,
 )
-from nv_maser.physics.optical_pump import compute_pump_rate
-from nv_maser.physics.environment import FieldEnvironment
-
 
 # ── Fixtures ──────────────────────────────────────────────────────
 

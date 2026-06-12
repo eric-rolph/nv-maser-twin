@@ -54,7 +54,6 @@ from .cavity import (
 from .optical_pump import compute_pump_state
 from .pulsed_pump import PulsedPumpResult, compute_pulsed_inversion
 
-
 # ── Public dataclasses ────────────────────────────────────────────
 
 

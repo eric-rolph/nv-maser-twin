@@ -23,7 +23,6 @@ from src.nv_maser.physics.q_boost import (
     compute_sql_limit_ratio,
 )
 
-
 # ── Shared constants ───────────────────────────────────────────────────────
 
 # Wang et al. (2024) experimental parameters

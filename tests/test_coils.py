@@ -3,8 +3,8 @@ import numpy as np
 import pytest
 
 from nv_maser.config import CoilConfig, GridConfig
-from nv_maser.physics.grid import SpatialGrid
 from nv_maser.physics.coils import ShimCoilArray
+from nv_maser.physics.grid import SpatialGrid
 
 
 @pytest.fixture

@@ -57,11 +57,12 @@ import math
 from dataclasses import dataclass
 
 from ..config import NVConfig
-from .quantum_noise import MaserNoiseResult
-from .signal_chain import SignalChainBudget
 
 # ── Physical constants ─────────────────────────────────────────────────────
 from .constants import KB as _KB
+from .quantum_noise import MaserNoiseResult
+from .signal_chain import SignalChainBudget
+
 _TWO_PI = 2.0 * math.pi
 
 

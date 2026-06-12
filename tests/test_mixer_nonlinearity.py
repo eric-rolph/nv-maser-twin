@@ -68,14 +68,15 @@ IMD3Product fields
 from __future__ import annotations
 
 import math
+
 import pytest
 
 from nv_maser.physics.mixer_nonlinearity import (
+    PRODUCT_2F1_MINUS_F2,
+    PRODUCT_2F2_MINUS_F1,
     IMD3Product,
     MixerNonlinearityConfig,
     MixerNonlinearityResult,
-    PRODUCT_2F1_MINUS_F2,
-    PRODUCT_2F2_MINUS_F1,
     compute_imd3_frequency_hz,
     compute_imd3_pair,
     compute_imd3_power_dbm,

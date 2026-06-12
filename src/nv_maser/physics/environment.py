@@ -9,13 +9,8 @@ from dataclasses import asdict, dataclass
 import numpy as np
 from numpy.typing import NDArray
 
-from ..config import SimConfig, NVConfig, MaserConfig
-from .grid import SpatialGrid
+from ..config import SimConfig
 from .base_field import compute_base_field
-from .disturbance import DisturbanceGenerator
-from .coils import ShimCoilArray
-from .maser_gain import compute_maser_metrics, max_tolerable_b_std
-from .thermal import ThermalModel, ThermalState, compute_thermal_state
 from .cavity import (
     compute_cavity_properties,
     compute_effective_q,
@@ -23,18 +18,21 @@ from .cavity import (
     compute_magnetic_q,
     compute_spectral_overlap,
 )
-from .signal_chain import compute_signal_chain_budget, compute_maser_noise_temperature
-from .optical_pump import compute_pump_state, compute_depth_resolved_pump
-from .pulsed_pump import compute_pulsed_inversion, compute_equivalent_cw_power
-from .maxwell_bloch import solve_maxwell_bloch, compute_steady_state_power
+from .coils import ShimCoilArray
+from .dipolar import estimate_dipolar_coupling_hz, estimate_refilling_time_us
+from .disturbance import DisturbanceGenerator
+from .grid import SpatialGrid
+from .maser_gain import compute_maser_metrics
+from .maxwell_bloch import compute_steady_state_power, solve_maxwell_bloch
+from .optical_pump import compute_depth_resolved_pump, compute_pump_state
+from .pulsed_pump import compute_equivalent_cw_power, compute_pulsed_inversion
+from .signal_chain import compute_maser_noise_temperature, compute_signal_chain_budget
 from .spectral import (
-    build_detuning_grid,
     build_initial_inversion,
     compute_on_resonance_inversion,
-    spectral_overlap_weights,
 )
-from .dipolar import estimate_dipolar_coupling_hz, estimate_refilling_time_us
 from .spectral_maxwell_bloch import solve_spectral_maxwell_bloch
+from .thermal import ThermalModel, ThermalState
 
 _MISSING = object()
 

@@ -1,6 +1,15 @@
 """FastAPI inference server for real-time field shimming."""
-from contextlib import asynccontextmanager
 import asyncio
+import json as _json
+import logging
+import os as _os
+import secrets
+import threading
+import time
+from contextlib import asynccontextmanager
+
+import numpy as np
+import torch
 from fastapi import FastAPI, HTTPException, Security
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -8,17 +17,10 @@ from fastapi.security import APIKeyHeader
 from pydantic import BaseModel, Field
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, PlainTextResponse
-import logging
-import secrets
-import threading
-import numpy as np
-import torch
-import time
+
 from ..config import SimConfig
-from ..physics.environment import FieldEnvironment
 from ..model.controller import build_controller
-import json as _json
-import os as _os
+from ..physics.environment import FieldEnvironment
 
 
 class _JsonFormatter(logging.Formatter):

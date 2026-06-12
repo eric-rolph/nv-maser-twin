@@ -43,8 +43,7 @@ import math
 from dataclasses import dataclass
 
 from ..config import MaserConfig, NVConfig
-from .cavity import CavityProperties, ThresholdResult, compute_cavity_properties
-
+from .cavity import CavityProperties, ThresholdResult
 
 # ── Physical constants ────────────────────────────────────────────
 from .constants import HBAR as _HBAR

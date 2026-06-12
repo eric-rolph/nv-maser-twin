@@ -61,7 +61,6 @@ from dataclasses import dataclass
 
 from ..config import NVConfig
 
-
 # ── Physical constant ──────────────────────────────────────────────────────
 _TWO_PI = 2.0 * math.pi
 

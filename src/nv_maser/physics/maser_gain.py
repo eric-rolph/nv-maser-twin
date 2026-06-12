@@ -22,12 +22,12 @@ safety factor: positive means masing, negative means below threshold.
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import numpy as np
 from numpy.typing import NDArray
 
-from dataclasses import dataclass
-
-from ..config import NVConfig, MaserConfig
+from ..config import MaserConfig, NVConfig
 from .nv_spin import (
     effective_linewidth_ghz,
     homogeneous_linewidth_ghz,

@@ -28,7 +28,6 @@ from nv_maser.physics.shielding import (
     find_thickness_for_target_db,
 )
 
-
 # ── helpers ────────────────────────────────────────────────────────────────────
 
 

@@ -54,8 +54,8 @@ import math
 from dataclasses import dataclass
 
 # ── Physical constants ────────────────────────────────────────────────────
-from .constants import HBAR as _HBAR, KB as _KB
-
+from .constants import HBAR as _HBAR
+from .constants import KB as _KB
 
 # ── Result dataclass ──────────────────────────────────────────────────────
 

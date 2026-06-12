@@ -1,10 +1,19 @@
 """Smoke test for reconstruction.py — run directly."""
 import numpy as np
+
 from nv_maser.physics.reconstruction import (
-    haar_wavelet_transform, haar_wavelet_inverse, reconstruct_fft, simulate_kspace,
-    reconstruct_compressed_sensing, apply_undersampling_mask, reconstruct_depth_profile,
-    reconstruct_gridding, image_snr_from_phantom, sweep_snr_vs_acceleration,
-    sweep_resolution_vs_fov, estimate_acceleration_factor,
+    apply_undersampling_mask,
+    estimate_acceleration_factor,
+    haar_wavelet_inverse,
+    haar_wavelet_transform,
+    image_snr_from_phantom,
+    reconstruct_compressed_sensing,
+    reconstruct_depth_profile,
+    reconstruct_fft,
+    reconstruct_gridding,
+    simulate_kspace,
+    sweep_resolution_vs_fov,
+    sweep_snr_vs_acceleration,
 )
 
 rng = np.random.default_rng(42)

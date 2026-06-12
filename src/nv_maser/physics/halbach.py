@@ -24,7 +24,7 @@ from dataclasses import dataclass
 import numpy as np
 from numpy.typing import NDArray
 
-from ..config import HalbachConfig, FieldConfig
+from ..config import FieldConfig, HalbachConfig
 from .grid import SpatialGrid
 
 

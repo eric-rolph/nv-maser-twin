@@ -81,11 +81,9 @@ References
 from __future__ import annotations
 
 import itertools
-import math
 from dataclasses import dataclass, field
 
-from .rf_rejection import InterfererSpec, _DEFAULT_INTERFERERS
-
+from .rf_rejection import _DEFAULT_INTERFERERS, InterfererSpec
 
 # ── defaults from up_conversion.DEFAULT_MIXER (avoid circular import) ─────────
 _DEFAULT_IIP3_DBM: float = 5.0   # default from DEFAULT_MIXER.ip3_dbm = 5.0

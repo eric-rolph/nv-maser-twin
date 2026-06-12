@@ -17,7 +17,6 @@ from nv_maser.physics.spectral import (
     spectral_overlap_weights,
 )
 
-
 # ── Fixtures ──────────────────────────────────────────────────────
 
 

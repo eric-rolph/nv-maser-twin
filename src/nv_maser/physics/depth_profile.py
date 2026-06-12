@@ -37,17 +37,19 @@ Casanova et al., "Single-Sided NMR" (Springer, 2011).
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import numpy as np
 from numpy.typing import NDArray
 
 from ..config import DepthProfileConfig
+from .constants import HBAR as _HBAR
+
+# ── Physical constants ────────────────────────────────────────────
+from .constants import KB as _KB
 from .single_sided_magnet import SingleSidedMagnet
 from .surface_coil import SurfaceCoil, sensitivity_on_axis
 
-# ── Physical constants ────────────────────────────────────────────
-from .constants import KB as _KB, HBAR as _HBAR
 _GAMMA_P = 2.675e8  # proton gyromagnetic ratio (rad/s/T)
 _N_PROTONS_WATER = 6.69e28  # protons per m³ in water
 

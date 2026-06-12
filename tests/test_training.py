@@ -1,5 +1,4 @@
 """Tests for the training loop (fast, small-scale variants)."""
-import pytest
 import torch
 
 from nv_maser.config import SimConfig

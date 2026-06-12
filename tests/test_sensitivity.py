@@ -24,9 +24,9 @@ from nv_maser.physics.sensitivity import (
     compute_thermal_sensitivity,
 )
 from nv_maser.physics.signal_chain import (
+    _KB,
     SignalChainBudget,
     compute_signal_chain_budget,
-    _KB,
 )
 
 _TWO_PI = 2.0 * math.pi

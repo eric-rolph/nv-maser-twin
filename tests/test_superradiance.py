@@ -25,11 +25,11 @@ from nv_maser.physics.cavity import (
     compute_n_effective,
 )
 from nv_maser.physics.superradiance import (
+    _HBAR,
     BELOW_THRESHOLD,
     MASING,
     SUPERRADIANT,
     SuperradianceResult,
-    _HBAR,
     compute_collective_coupling,
     compute_superradiance,
     compute_superradiant_delay,
@@ -37,7 +37,6 @@ from nv_maser.physics.superradiance import (
     compute_superradiant_pulse_duration,
     determine_regime,
 )
-
 
 # ── Helpers ────────────────────────────────────────────────────────
 

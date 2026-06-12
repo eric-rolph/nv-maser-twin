@@ -10,8 +10,6 @@ Covers:
 """
 from __future__ import annotations
 
-import math
-
 import numpy as np
 import pytest
 
@@ -22,8 +20,8 @@ from nv_maser.physics.depth_profile import (
 )
 from nv_maser.physics.susceptibility_adapter import (
     SUSCEPTIBILITY_TABLE,
-    SusceptibilityProfile,
     SusceptibilityCorrectedProfile,
+    SusceptibilityProfile,
     apply_susceptibility_correction,
     compute_dephasing_signal_loss,
     compute_frequency_shift,

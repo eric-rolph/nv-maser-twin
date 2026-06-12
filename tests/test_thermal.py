@@ -3,20 +3,19 @@ import numpy as np
 import pytest
 
 from nv_maser.config import (
+    FeedbackConfig,
+    FieldConfig,
+    MaserConfig,
+    NVConfig,
     SimConfig,
     ThermalConfig,
-    FieldConfig,
-    NVConfig,
-    MaserConfig,
-    FeedbackConfig,
-)
-from nv_maser.physics.thermal import (
-    ThermalState,
-    compute_thermal_state,
-    ThermalModel,
 )
 from nv_maser.physics.environment import FieldEnvironment
-
+from nv_maser.physics.thermal import (
+    ThermalModel,
+    ThermalState,
+    compute_thermal_state,
+)
 
 # ═══════════════════════════════════════════════════════════════════
 #  Fixtures

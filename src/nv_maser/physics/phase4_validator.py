@@ -53,14 +53,13 @@ from ..config import (
     SurfaceCoilConfig,
 )
 from .depth_profile import (
+    FOREARM_LAYERS,
     DepthProfile,
     TissueLayer,
-    FOREARM_LAYERS,
     simulate_depth_profile,
 )
 from .single_sided_magnet import SingleSidedMagnet
 from .surface_coil import SurfaceCoil
-
 
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║  Configuration                                                   ║

@@ -84,7 +84,6 @@ if TYPE_CHECKING:
 # ── Physical constants ────────────────────────────────────────────
 from .constants import HBAR as _HBAR
 
-
 # ── Result dataclasses ────────────────────────────────────────────
 
 @dataclass(frozen=True)

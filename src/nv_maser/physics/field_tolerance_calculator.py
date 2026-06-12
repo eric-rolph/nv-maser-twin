@@ -52,7 +52,7 @@ ADR-020 (gain_bandwidth_match.py): maser loaded Q = 30 000, BW ≈ 49 kHz.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 # ── Physical constants ────────────────────────────────────────────
 _GAMMA_BAR_P = 42.577e6   # proton γ/(2π) in Hz/T

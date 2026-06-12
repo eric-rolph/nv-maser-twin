@@ -19,16 +19,16 @@ import pytest
 from nv_maser.config import SingleSidedMagnetConfig, SurfaceCoilConfig
 from nv_maser.physics.depth_profile import TissueLayer
 from nv_maser.physics.probe import (
+    HandheldProbe,
     ProbeConfig,
     ProbePerformanceReport,
-    HandheldProbe,
-    compute_stray_field_rms,
     compute_probe_performance,
-    sweep_snr_vs_depth,
-    sweep_snr_vs_averages,
-    sweep_lateral_resolution_vs_n_lines,
-    sweep_stray_field_vs_separation,
+    compute_stray_field_rms,
     sweep_depth_resolution_vs_bandwidth,
+    sweep_lateral_resolution_vs_n_lines,
+    sweep_snr_vs_averages,
+    sweep_snr_vs_depth,
+    sweep_stray_field_vs_separation,
 )
 from nv_maser.physics.single_sided_magnet import SingleSidedMagnet
 from nv_maser.physics.snr_calculator import compute_snr_budget

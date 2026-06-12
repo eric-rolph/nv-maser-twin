@@ -21,16 +21,15 @@ from typing import Literal
 
 import numpy as np
 from numpy.typing import NDArray
-from scipy.special import wofz
 from scipy.optimize import curve_fit
+from scipy.special import wofz
 
 from ..config import NVConfig
 from .nv_spin import (
-    transition_frequencies,
     effective_linewidth_ghz,
     homogeneous_linewidth_ghz,
+    transition_frequencies,
 )
-
 
 # ── Data containers ──────────────────────────────────────────────────
 

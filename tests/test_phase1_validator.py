@@ -18,7 +18,6 @@ Coverage targets
 """
 from __future__ import annotations
 
-import math
 import pytest
 
 from nv_maser.config import CavityConfig, MaserConfig, NVConfig
@@ -26,10 +25,9 @@ from nv_maser.physics.phase1_validator import (
     OscillationThresholdResult,
     Phase1Config,
     Phase1MilestoneResult,
-    validate_phase1_milestone,
     _spin_linewidth_hz,
+    validate_phase1_milestone,
 )
-
 
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║  1. Phase1Config                                                 ║

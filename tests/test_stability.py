@@ -20,11 +20,10 @@ import math
 import numpy as np
 import pytest
 
-from nv_maser.config import NVConfig
+from nv_maser.config import MaserConfig, NVConfig, SignalChainConfig
 from nv_maser.physics.quantum_noise import MaserNoiseResult, compute_phase_noise_spectrum
 from nv_maser.physics.sensitivity import compute_sensitivity
 from nv_maser.physics.signal_chain import compute_signal_chain_budget
-from nv_maser.config import MaserConfig, SignalChainConfig
 from nv_maser.physics.stability import (
     CombinedADEVResult,
     NoiseProcessADEV,

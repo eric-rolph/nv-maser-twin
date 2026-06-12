@@ -2,21 +2,21 @@
 from __future__ import annotations
 
 import math
+
 import pytest
-import numpy as np
 
 from nv_maser.physics.pulse_sequence import (
-    SpinEchoResult,
     CPMGResult,
     GREResult,
     InversionRecoveryResult,
     SNREfficiency,
-    simulate_spin_echo,
+    SpinEchoResult,
+    ernst_angle,
+    optimal_te_for_contrast,
     simulate_cpmg,
     simulate_gre,
     simulate_inversion_recovery,
-    ernst_angle,
-    optimal_te_for_contrast,
+    simulate_spin_echo,
     snr_efficiency,
 )
 

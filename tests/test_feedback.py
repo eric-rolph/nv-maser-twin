@@ -2,13 +2,13 @@
 import numpy as np
 import pytest
 
-from nv_maser.config import FeedbackConfig, CoilConfig, GridConfig, SimConfig
-from nv_maser.physics.grid import SpatialGrid
+from nv_maser.config import FeedbackConfig, GridConfig
 from nv_maser.physics.feedback import (
+    CoilDynamics,
     HallSensorArray,
     quantize_currents,
-    CoilDynamics,
 )
+from nv_maser.physics.grid import SpatialGrid
 
 
 @pytest.fixture

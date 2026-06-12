@@ -12,8 +12,6 @@ combinations that maximise inversion within a power budget.
 """
 from __future__ import annotations
 
-import math
-
 import pytest
 
 from nv_maser.config import CavityConfig, MaserConfig, NVConfig, OpticalPumpConfig
@@ -25,7 +23,6 @@ from nv_maser.physics.pulsed_pump_optimizer import (
     compute_pulsed_threshold,
     optimize_pulse_sequence,
 )
-
 
 # ── Fixtures ──────────────────────────────────────────────────────
 
@@ -183,7 +180,6 @@ class TestOptimizePulseSequence:
     ) -> None:
         """At fixed duty, longer pulses should achieve at least as much
         mean inversion as very short ones (inversion builds up during ON)."""
-        from nv_maser.physics.pulsed_pump_optimizer import PulseCandidate
 
         # Run two single-candidate searches and compare
         short = optimize_pulse_sequence(

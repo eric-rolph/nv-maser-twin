@@ -37,14 +37,14 @@ from typing import TYPE_CHECKING
 import numpy as np
 from numpy.typing import NDArray
 
-from .depth_profile import TissueLayer, DepthProfile, _assign_layers
+from .depth_profile import DepthProfile, TissueLayer, _assign_layers
 
 if TYPE_CHECKING:
-    from ..config import DepthProfileConfig
+    pass
 
 try:
-    import torch
     import MRzeroCore as mr0
+    import torch
 
     MRZERO_AVAILABLE = True
 except ImportError:  # pragma: no cover

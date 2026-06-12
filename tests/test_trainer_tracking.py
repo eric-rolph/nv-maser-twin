@@ -7,8 +7,6 @@ import importlib
 import sys
 from pathlib import Path
 
-import pytest
-
 from nv_maser.config import SimConfig
 from nv_maser.model.training import Trainer
 from nv_maser.tracking import ExperimentTracker

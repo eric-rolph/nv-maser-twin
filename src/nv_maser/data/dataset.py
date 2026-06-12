@@ -16,8 +16,8 @@ import torch
 from torch.utils.data import TensorDataset
 
 from ..config import SimConfig
-from ..physics.environment import FieldEnvironment
 from ..physics.disturbance import DisturbanceGenerator
+from ..physics.environment import FieldEnvironment
 
 logger = logging.getLogger("nv_maser.data")
 

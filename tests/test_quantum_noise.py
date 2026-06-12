@@ -9,8 +9,6 @@ from nv_maser.physics.cavity import compute_cavity_properties
 from nv_maser.physics.maxwell_bloch import solve_maxwell_bloch
 from nv_maser.physics.quantum_noise import (
     MaserNoiseResult,
-    PhaseNoiseSpectrum,
-    RINSpectrum,
     compute_added_noise,
     compute_maser_noise,
     compute_noise_temperature,
@@ -19,7 +17,6 @@ from nv_maser.physics.quantum_noise import (
     compute_rin_spectrum,
     compute_schawlow_townes_linewidth,
 )
-
 
 # ── Shared physical constants ──────────────────────────────────────
 

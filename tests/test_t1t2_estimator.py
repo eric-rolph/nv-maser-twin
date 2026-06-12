@@ -17,12 +17,15 @@ import math
 import numpy as np
 import pytest
 
+from nv_maser.physics.depth_profile import (
+    FOREARM_LAYERS,
+    HEMORRHAGE_LAYERS,
+    TissueLayer,
+)
 from nv_maser.physics.t1t2_estimator import (
-    AbnormalityFlag,
     BiexpT2FitResult,
     BlandAltmanResult,
     BlandAltmanT1T2,
-    T1FitResult,
     T1MapResult,
     T1T2CrossValidation,
     T1T2Map,
@@ -39,12 +42,6 @@ from nv_maser.physics.t1t2_estimator import (
     map_t2_from_cpmg,
     select_t2_model,
 )
-from nv_maser.physics.depth_profile import (
-    FOREARM_LAYERS,
-    HEMORRHAGE_LAYERS,
-    TissueLayer,
-)
-
 
 # ── Test fixtures ─────────────────────────────────────────────────
 

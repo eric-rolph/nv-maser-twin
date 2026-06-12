@@ -65,7 +65,6 @@ from ..config import CavityConfig, MaserConfig, NVConfig, OpticalPumpConfig
 from .cavity import compute_full_threshold
 from .optical_pump import compute_pump_state
 
-
 # ── Physical constant ─────────────────────────────────────────────
 _PI = math.pi
 

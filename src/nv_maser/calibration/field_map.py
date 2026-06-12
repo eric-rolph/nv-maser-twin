@@ -23,7 +23,7 @@ See nv-maser-hardware/calibration/FORMAT.md for full details.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
@@ -303,8 +303,8 @@ def simulated_field_map(
     Returns:
         FieldMap with source="simulation".
     """
-    from ..physics.environment import FieldEnvironment
     from ..physics.disturbance import DisturbanceGenerator
+    from ..physics.environment import FieldEnvironment
 
     env = FieldEnvironment(config)
     field_2d = env.base_field.astype(np.float32)  # (size, size)

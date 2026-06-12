@@ -6,18 +6,16 @@ import pytest
 
 from nv_maser.config import SurfaceCoilConfig
 from nv_maser.physics.surface_coil import (
-    SurfaceCoil,
+    _MU0,
     CoilProperties,
     NoiseComponents,
-    sensitivity_on_axis,
-    sensitivity_off_axis,
+    SurfaceCoil,
     compute_coil_properties,
     compute_noise,
+    sensitivity_off_axis,
+    sensitivity_on_axis,
     snr_per_voxel,
-    _MU0,
-    _KB,
 )
-
 
 # ── Fixtures ──────────────────────────────────────────────────────
 

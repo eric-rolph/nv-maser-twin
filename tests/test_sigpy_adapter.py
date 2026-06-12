@@ -9,7 +9,6 @@ Tests cover:
 - RF pulse design
 - Bloch simulation of excitation profiles
 """
-import math
 
 import numpy as np
 import pytest
@@ -40,7 +39,6 @@ from nv_maser.physics.sigpy_adapter import (  # noqa: E402
     simulate_signal,
 )
 from nv_maser.physics.single_sided_magnet import SingleSidedMagnet  # noqa: E402
-
 
 # ── Fixtures ──────────────────────────────────────────────────────
 

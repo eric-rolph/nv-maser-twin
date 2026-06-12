@@ -5,13 +5,13 @@ from __future__ import annotations
 import pytest
 
 from nv_maser.physics import (
-    GainBandwidthConfig,
     BandwidthMatchResult,
-    compute_maser_gain_bandwidth,
+    GainBandwidthConfig,
     compute_b0_drift_tolerance,
     compute_bandwidth_match,
-    sweep_q_vs_gain_bandwidth,
+    compute_maser_gain_bandwidth,
     sweep_b0_drift_vs_overlap,
+    sweep_q_vs_gain_bandwidth,
 )
 
 # ---------------------------------------------------------------------------
@@ -264,13 +264,13 @@ class TestSweepB0DriftVsOverlap:
 class TestPublicAPI:
     def test_all_symbols_importable_from_physics(self):
         from nv_maser.physics import (  # noqa: F401
-            GainBandwidthConfig,
             BandwidthMatchResult,
-            compute_maser_gain_bandwidth,
+            GainBandwidthConfig,
             compute_b0_drift_tolerance,
             compute_bandwidth_match,
-            sweep_q_vs_gain_bandwidth,
+            compute_maser_gain_bandwidth,
             sweep_b0_drift_vs_overlap,
+            sweep_q_vs_gain_bandwidth,
         )
         assert GainBandwidthConfig is not None
         assert BandwidthMatchResult is not None

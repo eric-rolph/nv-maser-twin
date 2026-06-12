@@ -29,9 +29,9 @@ from dataclasses import dataclass
 
 from ..config import NVConfig, OpticalPumpConfig
 
-
 # ── Physical constants ────────────────────────────────────────────
 from .constants import HBAR as _HBAR
+
 _C = 2.99792458e8  # m/s
 
 

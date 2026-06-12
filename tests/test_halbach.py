@@ -5,17 +5,15 @@ import numpy as np
 import pytest
 
 from nv_maser.config import FieldConfig, GridConfig, HalbachConfig
+from nv_maser.physics.base_field import compute_base_field
 from nv_maser.physics.grid import SpatialGrid
 from nv_maser.physics.halbach import (
-    MultipoleCoefficients,
     compute_halbach_field,
     compute_manufacturing_errors,
     compute_multipole_coefficients,
     compute_segmentation_harmonics,
     evaluate_multipole_field,
 )
-from nv_maser.physics.base_field import compute_base_field
-
 
 # ── Fixtures ──────────────────────────────────────────────────────
 

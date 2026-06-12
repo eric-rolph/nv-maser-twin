@@ -2,7 +2,7 @@
 import numpy as np
 import pytest
 
-from nv_maser.config import NVConfig, MaserConfig
+from nv_maser.config import MaserConfig, NVConfig
 from nv_maser.physics.maser_gain import (
     compute_gain_budget,
     compute_maser_metrics,

@@ -77,11 +77,11 @@ from numpy.typing import NDArray
 
 from ..config import MaserConfig, NVConfig
 from .cavity import CavityProperties
-from .maxwell_bloch import MaxwellBlochResult
 
 # ── Physical constants ─────────────────────────────────────────────
-from .constants import HBAR as _HBAR, KB as _KB
-
+from .constants import HBAR as _HBAR
+from .constants import KB as _KB
+from .maxwell_bloch import MaxwellBlochResult
 
 # ── Result containers ──────────────────────────────────────────────
 

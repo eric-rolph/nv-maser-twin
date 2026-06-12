@@ -38,34 +38,34 @@ import numpy as np
 from numpy.typing import NDArray
 
 from ..config import (
+    DepthProfileConfig,
     SingleSidedMagnetConfig,
     SurfaceCoilConfig,
-    DepthProfileConfig,
-)
-from .single_sided_magnet import SingleSidedMagnet
-from .surface_coil import SurfaceCoil, sensitivity_on_axis
-from .depth_profile import (
-    TissueLayer,
-    DepthProfile,
-    simulate_depth_profile,
-    FOREARM_LAYERS,
-)
-from .planar_gradient import (
-    GradientCoilSpec,
-    DEFAULT_GX,
-    DEFAULT_GY,
-    build_phase_encode_scheme,
-    PhaseEncodeScheme,
-)
-from .snr_calculator import (
-    SNRBudget,
-    compute_snr_budget,
-    snr_vs_depth,
-    snr_vs_averages,
 )
 
 # ── Physical constants ────────────────────────────────────────────
 from .constants import MU0 as _MU0
+from .depth_profile import (
+    DepthProfile,
+    TissueLayer,
+    simulate_depth_profile,
+)
+from .planar_gradient import (
+    DEFAULT_GX,
+    DEFAULT_GY,
+    GradientCoilSpec,
+    PhaseEncodeScheme,
+    build_phase_encode_scheme,
+)
+from .single_sided_magnet import SingleSidedMagnet
+from .snr_calculator import (
+    SNRBudget,
+    compute_snr_budget,
+    snr_vs_averages,
+    snr_vs_depth,
+)
+from .surface_coil import SurfaceCoil, sensitivity_on_axis
+
 _GAMMA_P_HZ_PER_T = 42.577e6    # proton gyromagnetic ratio (Hz/T)
 
 

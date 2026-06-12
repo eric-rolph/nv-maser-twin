@@ -2,7 +2,7 @@
 import pytest
 import torch
 
-from nv_maser.config import CoilConfig, ModelArchitecture, ModelConfig, SimConfig
+from nv_maser.config import CoilConfig, ModelArchitecture, ModelConfig
 from nv_maser.model.controller import CNNController, LSTMController, MLPController, build_controller
 
 

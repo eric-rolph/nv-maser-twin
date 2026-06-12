@@ -10,7 +10,6 @@ Covers:
 - Target-SNR sensitivity: higher target → shallower max_depth
 - Architecture validation: V1 5–15 mm range
 """
-import math
 
 import pytest
 
@@ -25,7 +24,6 @@ from nv_maser.physics.depth_limit_calculator import (
 from nv_maser.physics.depth_profile import TissueLayer
 from nv_maser.physics.single_sided_magnet import SingleSidedMagnet
 from nv_maser.physics.surface_coil import SurfaceCoil
-
 
 # ── Fixtures ──────────────────────────────────────────────────────
 

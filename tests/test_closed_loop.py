@@ -4,8 +4,8 @@ import pytest
 
 from nv_maser.config import SimConfig
 from nv_maser.physics.closed_loop import (
-    ClosedLoopSimulator,
     ClosedLoopResult,
+    ClosedLoopSimulator,
     LoopStepResult,
 )
 

@@ -10,12 +10,11 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import torch
 
 from nv_maser.config import SimConfig
 from nv_maser.physics.environment import FieldEnvironment
 from nv_maser.rl.env import ShimmingEnv
-import torch
-
 
 # ── Helpers ────────────────────────────────────────────────────────────
 
@@ -473,8 +472,8 @@ class TestEndToEndPPOClosedLoop:
 
     def test_disturbance_features_in_closed_loop(self, tmp_path: Path) -> None:
         """Closed-loop works with mains hum and DC drift enabled."""
-        from nv_maser.rl.ppo import PPOConfig, PPOTrainer
         from nv_maser.rl.bridge import validate_policy_closed_loop
+        from nv_maser.rl.ppo import PPOConfig, PPOTrainer
 
         sim_cfg = SimConfig(
             grid={"size": 16},

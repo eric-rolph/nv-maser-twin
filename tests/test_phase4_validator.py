@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import math
 
-import numpy as np
 import pytest
 
 from nv_maser.config import (
@@ -27,21 +26,20 @@ from nv_maser.config import (
     SurfaceCoilConfig,
 )
 from nv_maser.physics.depth_profile import (
-    TissueLayer,
-    DepthProfile,
     FOREARM_LAYERS,
+    DepthProfile,
+    TissueLayer,
     simulate_depth_profile,
 )
-from nv_maser.physics.single_sided_magnet import SingleSidedMagnet
-from nv_maser.physics.surface_coil import SurfaceCoil
 from nv_maser.physics.phase4_validator import (
-    Phase4Config,
     LayerContrastResult,
+    Phase4Config,
     Phase4MilestoneResult,
     compute_layer_contrast,
     validate_phase4_milestone,
 )
-
+from nv_maser.physics.single_sided_magnet import SingleSidedMagnet
+from nv_maser.physics.surface_coil import SurfaceCoil
 
 # ── Shared fixtures ───────────────────────────────────────────────
 

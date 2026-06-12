@@ -3,8 +3,8 @@ import numpy as np
 import pytest
 
 from nv_maser.config import FieldConfig, GridConfig
-from nv_maser.physics.grid import SpatialGrid
 from nv_maser.physics.base_field import compute_base_field
+from nv_maser.physics.grid import SpatialGrid
 
 
 @pytest.fixture

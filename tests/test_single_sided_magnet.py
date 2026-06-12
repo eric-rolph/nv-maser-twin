@@ -6,16 +6,15 @@ import pytest
 
 from nv_maser.config import SingleSidedMagnetConfig
 from nv_maser.physics.single_sided_magnet import (
-    SingleSidedMagnet,
-    SweetSpotInfo,
+    _MU0,
     FieldMap2D,
     MilestoneResult,
-    validate_sweet_spot_milestone,
-    _solid_cylinder_on_axis_bz,
+    SingleSidedMagnet,
+    SweetSpotInfo,
     _annular_ring_on_axis_bz,
-    _MU0,
+    _solid_cylinder_on_axis_bz,
+    validate_sweet_spot_milestone,
 )
-
 
 # ── Fixtures ──────────────────────────────────────────────────────
 

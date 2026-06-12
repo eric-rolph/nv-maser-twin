@@ -24,11 +24,10 @@ import numpy as np
 from numpy.typing import NDArray
 
 from ..config import DisturbanceConfig
-from .grid import SpatialGrid
 
 # ── Physical constants ────────────────────────────────────────────
 from .constants import MU0 as _MU0
-
+from .grid import SpatialGrid
 
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║  Imaging-magnet stray field model                                ║

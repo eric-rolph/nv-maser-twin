@@ -16,9 +16,8 @@ from __future__ import annotations
 import numpy as np
 from numpy.typing import NDArray
 
-from ..config import FeedbackConfig, CoilConfig
+from ..config import FeedbackConfig
 from .grid import SpatialGrid
-
 
 # ─── Hall sensor model ─────────────────────────────────────────────
 

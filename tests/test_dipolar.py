@@ -6,7 +6,7 @@ import math
 import numpy as np
 import pytest
 
-from nv_maser.config import DipolarConfig, SpectralConfig
+from nv_maser.config import DipolarConfig
 from nv_maser.physics.dipolar import (
     apply_dipolar_refilling,
     estimate_dipolar_coupling_hz,
@@ -14,7 +14,6 @@ from nv_maser.physics.dipolar import (
     spectral_diffusion_step,
     stretched_exponential_refill,
 )
-
 
 # ── Fixtures ──────────────────────────────────────────────────────
 

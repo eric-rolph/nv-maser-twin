@@ -25,7 +25,7 @@ import numpy as np
 import torch
 from numpy.typing import NDArray
 
-from ..config import SimConfig, ModelConfig, ModelArchitecture, CoilConfig
+from ..config import ModelArchitecture, SimConfig
 from ..model.controller import build_controller
 from .ppo import ActorCritic
 

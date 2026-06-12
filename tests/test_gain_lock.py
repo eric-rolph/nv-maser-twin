@@ -16,7 +16,6 @@ from nv_maser.physics.gain_lock import (
     run_gain_lock_simulation,
 )
 
-
 # ── Fixtures ──────────────────────────────────────────────────────
 
 

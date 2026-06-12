@@ -17,7 +17,6 @@ from numpy.typing import NDArray
 from ..config import CoilConfig
 from .grid import SpatialGrid
 
-
 # ---------------------------------------------------------------------------
 # Gradient-coil basis functions (2D spatial harmonics, normalised to ‖·‖∞ = 1)
 # ---------------------------------------------------------------------------

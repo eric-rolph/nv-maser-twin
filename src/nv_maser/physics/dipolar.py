@@ -29,7 +29,7 @@ import math
 import numpy as np
 from numpy.typing import NDArray
 
-from ..config import DipolarConfig, SpectralConfig
+from ..config import DipolarConfig
 
 
 def stretched_exponential_refill(

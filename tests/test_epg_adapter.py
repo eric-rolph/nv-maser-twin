@@ -22,18 +22,16 @@ from nv_maser.physics.depth_profile import (
 )
 from nv_maser.physics.epg_adapter import (
     EPGDepthProfile,
-    EPGResult,
     EPGValidation,
+    _epg_grad,
+    _epg_init,
+    _epg_relax,
+    _epg_rf,
     cross_validate_epg_vs_analytical,
     epg_cpmg,
     epg_depth_profile,
     epg_signal,
-    _epg_init,
-    _epg_rf,
-    _epg_relax,
-    _epg_grad,
 )
-
 
 # ── Fixtures ──────────────────────────────────────────────────────
 

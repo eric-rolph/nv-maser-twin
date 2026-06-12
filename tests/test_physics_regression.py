@@ -36,7 +36,6 @@ from nv_maser.physics.optical_pump import compute_absorbed_power
 from nv_maser.physics.signal_chain import compute_maser_noise_temperature
 from nv_maser.physics.spectral_maxwell_bloch import solve_spectral_maxwell_bloch
 
-
 # ── Fixtures ──────────────────────────────────────────────────────
 
 

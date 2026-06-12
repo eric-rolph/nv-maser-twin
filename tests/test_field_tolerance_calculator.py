@@ -13,25 +13,23 @@ Coverage:
 from __future__ import annotations
 
 import math
+
 import pytest
 
 from nv_maser.physics.field_tolerance_calculator import (
+    _GAMMA_BAR_P,
+    _PI,
     FieldToleranceConfig,
-    B0SensitivityPoint,
-    HomogeneityPoint,
     FieldToleranceResult,
+    _b0_for_snr_loss_db,
+    _maser_limit_ppm,
+    _uniformity_for_fid_loss_db,
     compute_b0_sensitivity_point,
+    compute_field_tolerance,
     compute_homogeneity_point,
     sweep_b0_sensitivity,
     sweep_homogeneity,
-    compute_field_tolerance,
-    _b0_for_snr_loss_db,
-    _uniformity_for_fid_loss_db,
-    _maser_limit_ppm,
-    _GAMMA_BAR_P,
-    _PI,
 )
-
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Fixtures

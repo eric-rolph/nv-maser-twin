@@ -39,11 +39,13 @@ from dataclasses import dataclass
 import numpy as np
 from numpy.typing import NDArray
 
-from ..config import NVConfig, MaserConfig, SignalChainConfig
-from .quantum_noise import MaserNoiseResult
+from ..config import MaserConfig, NVConfig, SignalChainConfig
 
 # ── Physical constants ────────────────────────────────────────────
-from .constants import HBAR as _HBAR, KB as _KB
+from .constants import HBAR as _HBAR
+from .constants import KB as _KB
+from .quantum_noise import MaserNoiseResult
+
 _T0 = 290.0  # IEEE reference temperature (K)
 
 

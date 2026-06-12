@@ -17,9 +17,8 @@ from __future__ import annotations
 import time
 
 import numpy as np
-import torch
-
 import pyqtgraph as pg
+import torch
 from pyqtgraph.Qt import QtCore, QtWidgets
 
 from ..config import SimConfig

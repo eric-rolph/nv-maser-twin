@@ -29,14 +29,13 @@ from src.nv_maser.physics.amplifier import (
     compute_maser_gain,
     compute_noise_temperature,
     compute_output_power,
-    compute_sql_noise_temperature,
     compute_spin_temperature,
+    compute_sql_noise_temperature,
 )
 from src.nv_maser.physics.cavity import (
     compute_cavity_properties,
     compute_full_threshold,
 )
-
 
 # ── Fixtures ───────────────────────────────────────────────────────────────
 

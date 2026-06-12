@@ -28,9 +28,10 @@ from dataclasses import dataclass
 
 from ..config import CavityConfig, MaserConfig, NVConfig
 
-
 # ── Physical constants ────────────────────────────────────────────
-from .constants import HBAR as _HBAR, MU0 as _MU0
+from .constants import HBAR as _HBAR
+from .constants import MU0 as _MU0
+
 _C = 2.99792458e8  # m/s
 
 

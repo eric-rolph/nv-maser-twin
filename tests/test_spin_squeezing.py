@@ -8,7 +8,6 @@ from nv_maser.physics.spin_squeezing import (
     REGIME_COHERENT,
     REGIME_NEAR_HEISENBERG,
     REGIME_SQUEEZED,
-    ProjectionNoiseResult,
     QuantumEnhancementResult,
     SpinSqueezingResult,
     classify_squeezing_regime,

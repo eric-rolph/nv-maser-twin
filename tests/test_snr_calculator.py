@@ -14,7 +14,7 @@ import math
 import numpy as np
 import pytest
 
-from nv_maser.config import SurfaceCoilConfig, SingleSidedMagnetConfig
+from nv_maser.config import SingleSidedMagnetConfig, SurfaceCoilConfig
 from nv_maser.physics.depth_profile import TissueLayer
 from nv_maser.physics.single_sided_magnet import SingleSidedMagnet
 from nv_maser.physics.snr_calculator import (
@@ -26,8 +26,7 @@ from nv_maser.physics.snr_calculator import (
     snr_vs_voxel_size,
 )
 from nv_maser.physics.surface_coil import SurfaceCoil
-from nv_maser.physics.up_conversion import DEFAULT_MIXER, MixerSpec
-
+from nv_maser.physics.up_conversion import MixerSpec
 
 # ── Fixtures ──────────────────────────────────────────────────────
 
