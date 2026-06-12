@@ -41,7 +41,9 @@ jobs:
         run: pip install -e ".[dev,api,onnx]"
 
       - name: Run tests with coverage
-        run: pytest --cov=nv_maser --cov-report=xml --cov-fail-under=80
+        # Path form (matches the Makefile): the module form --cov=nv_maser
+        # under-reports with PEP 660 editable installs (measured 15% vs real).
+        run: pytest --cov=src/nv_maser --cov-report=xml --cov-fail-under=80
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
