@@ -56,11 +56,9 @@ from ..config import CavityConfig, MaserConfig, NVConfig
 from .amplifier import (
     AmplifierProperties,
     compute_amplifier_properties,
-    compute_cavity_properties,
     compute_output_power,
 )
-from .cavity import compute_full_threshold
-
+from .cavity import compute_cavity_properties, compute_full_threshold
 
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║  Configuration                                                   ║

@@ -6,16 +6,15 @@ import math
 import pytest
 
 from nv_maser.physics.rf_rejection import (
-    InterfererSpec,
     InterfererResult,
+    InterfererSpec,
     RFRejectionConfig,
     RFRejectionResult,
-    compute_lorentzian_attenuation,
     compute_fractional_bandwidth,
     compute_interferer_rejection,
+    compute_lorentzian_attenuation,
     compute_rf_rejection,
 )
-
 
 # ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -285,7 +284,8 @@ class TestComputeInterfererRejection:
         result = compute_interferer_rejection(near_spec, cfg)
         # baseband freq = |maser_center + 5kHz − LO| ≈ NMR_freq + 5kHz ≈ 2.134 MHz → NOT in 20 kHz band
         # Actually this lands at ~2.134 MHz which is NOT in the ±10 kHz readout band.
-        # Let's use a spec that truly lands in the readout band:
+        assert result.in_readout_band is False
+        # Use a spec that truly lands in the readout band:
         # We want |f_int - f_LO| < 10 kHz. f_LO ≈ 1.46777 GHz. So f_int ≈ f_LO ± 5 kHz.
         in_band_spec = InterfererSpec(
             "InBand", cfg.lo_freq_hz + 5_000.0, 1_000.0, -30.0  # type: ignore[arg-type]

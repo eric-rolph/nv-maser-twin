@@ -8,13 +8,12 @@ Usage:
 import argparse
 import logging
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
-
 from nv_maser.config import SimConfig
 from nv_maser.data.dataset import build_dataset
 
 
 def main():
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
     parser = argparse.ArgumentParser(description="Build and cache shimming dataset")
     parser.add_argument("--samples", type=int, default=10_000)
     parser.add_argument("--cache-dir", default="datasets/")

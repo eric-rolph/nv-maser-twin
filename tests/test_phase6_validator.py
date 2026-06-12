@@ -25,17 +25,16 @@ import numpy as np
 import pytest
 
 from nv_maser.physics.phase6_validator import (
-    Phase6Config,
-    GridPhantomResult,
     BarContrastResult,
+    GridPhantomResult,
+    Phase6Config,
     Phase6MilestoneResult,
     _make_bar_phantom,
-    _reconstruct_from_phantom,
-    _measure_psf_fwhm,
     _measure_bar_contrast,
+    _measure_psf_fwhm,
+    _reconstruct_from_phantom,
     validate_phase6_milestone,
 )
-
 
 # ── Shared fixtures ───────────────────────────────────────────────
 
@@ -254,7 +253,6 @@ class TestMakeBarPhantom:
         ph = _make_bar_phantom(64, 0.064, 3.0)
         # 3 bars per feature → ~10-11 bar pairs across 64 pixels
         bright_cols = sum(1 for c in range(64) if ph[0, c] == 1.0)
-        dark_cols = 64 - bright_cols
         # Should be roughly half bright, half dark (with possible edge effect)
         assert 20 <= bright_cols <= 44
 

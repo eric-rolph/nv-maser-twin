@@ -384,7 +384,6 @@ def design_excitation_pulse(
         raise RuntimeError("sigpy is required for RF pulse design")
 
     duration_s = duration_us * 1e-6
-    dt_s = duration_s / n_points
     time_us = np.arange(n_points) * (duration_us / n_points)
     tbw = bandwidth_hz * duration_s  # time-bandwidth product
 

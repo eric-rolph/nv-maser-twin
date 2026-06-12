@@ -60,6 +60,9 @@ from ..config import (
     SpectralConfig,
 )
 from .cavity import compute_cavity_properties, compute_n_effective
+
+# ── Physical constants ────────────────────────────────────────────
+from .constants import HBAR as _HBAR
 from .dipolar import apply_dipolar_refilling
 from .spectral import (
     build_detuning_grid,
@@ -67,9 +70,6 @@ from .spectral import (
     fwhm_to_sigma,
     q_gaussian,
 )
-
-# ── Physical constants ────────────────────────────────────────────
-from .constants import HBAR as _HBAR
 
 
 @dataclass(frozen=True)
@@ -248,7 +248,6 @@ def solve_spectral_maxwell_bloch(
     cooperativity = 4 * g_ens_sq / (kappa_c * kappa_s) if kappa_c * kappa_s > 0 else 0.0
 
     # Equilibrium inversion profile (pumped)
-    sz0 = nv_config.pump_efficiency / 2.0
     _, p_eq = build_initial_inversion(nv_config, spectral_config)
 
     # ── Initial conditions ───────────────────────────────────────

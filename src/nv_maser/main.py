@@ -34,8 +34,8 @@ def _deep_merge_config(base: SimConfig, overrides: dict) -> SimConfig:
 
 def cmd_train(config: SimConfig) -> None:
     from .model.training import Trainer
-    from .viz.plots import plot_training_history
     from .tracking import ExperimentTracker
+    from .viz.plots import plot_training_history
 
     tracker = ExperimentTracker()
     trainer = Trainer(config, tracker=tracker)
@@ -45,7 +45,14 @@ def cmd_train(config: SimConfig) -> None:
 
 def cmd_demo(config: SimConfig) -> None:
     from .model.training import Trainer
-    from .viz.dashboard import run_dashboard
+
+    try:
+        from .viz.dashboard import run_dashboard
+    except ImportError as exc:
+        raise SystemExit(
+            "The demo dashboard requires the optional viz dependencies "
+            '(PyQt6 + pyqtgraph). Install them with: pip install -e ".[viz]"'
+        ) from exc
 
     trainer = Trainer(config)
     trainer.load_best()
@@ -56,6 +63,7 @@ def cmd_demo(config: SimConfig) -> None:
 def cmd_evaluate(config: SimConfig) -> None:
     import numpy as np
     import torch
+
     from .model.training import Trainer
 
     trainer = Trainer(config)
@@ -83,12 +91,16 @@ def cmd_evaluate(config: SimConfig) -> None:
 
     before_stds = np.std(X.squeeze(1).cpu()[:, mask].numpy(), axis=1)
     after_stds = np.std(net.cpu()[:, mask].numpy(), axis=1)
-    improvement = np.mean(before_stds) / np.mean(after_stds)
-    print(f"\n  Average improvement factor: {improvement:.1f}x")
+    mean_after = np.mean(after_stds)
+    if mean_after > 0:
+        print(f"\n  Average improvement factor: {np.mean(before_stds) / mean_after:.1f}x")
+    else:
+        print("\n  Average improvement factor: inf (residual std is zero)")
 
 
 def cmd_visualize_coils(config: SimConfig) -> None:
     import matplotlib.pyplot as plt
+
     from .physics.environment import FieldEnvironment
     from .viz.plots import plot_coil_influence, plot_disturbance_spectrum
 
@@ -123,7 +135,9 @@ def main() -> None:
         default="auto",
         choices=["auto", "cuda", "cpu"],
     )
-    parser.add_argument("--arch", type=str, default=None, choices=["cnn", "mlp"])
+    parser.add_argument(
+        "--arch", type=str, default=None, choices=["cnn", "mlp", "lstm"]
+    )
     parser.add_argument("--epochs", type=int, default=None)
     parser.add_argument("--samples", type=int, default=None)
 
@@ -171,7 +185,9 @@ def main() -> None:
         import yaml
         from pydantic import ValidationError
 
-        with open(args.config) as f:
+        # Explicit UTF-8: config files contain non-ASCII units (Γ, μ) and the
+        # Windows locale default (cp1252) cannot decode them.
+        with open(args.config, encoding="utf-8") as f:
             overrides = yaml.safe_load(f)
         try:
             config = _deep_merge_config(config, overrides)

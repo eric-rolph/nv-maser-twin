@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from enum import Enum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ModelArchitecture(str, Enum):
@@ -15,7 +15,17 @@ class ModelArchitecture(str, Enum):
     LSTM = "lstm"
 
 
-class GridConfig(BaseModel):
+class StrictModel(BaseModel):
+    """Base for all config models: unknown keys raise a ValidationError.
+
+    Without this, a typo in a YAML override (e.g. ``epoch`` instead of
+    ``epochs``) would be silently ignored and the default used instead.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class GridConfig(StrictModel):
     """Spatial grid parameters."""
 
     size: int = Field(64, description="Grid points per axis (size × size)")
@@ -31,7 +41,7 @@ class GridConfig(BaseModel):
     )
 
 
-class FieldConfig(BaseModel):
+class FieldConfig(StrictModel):
     """Base magnetic field parameters."""
 
     b0_tesla: float = Field(
@@ -46,7 +56,7 @@ class FieldConfig(BaseModel):
     )
 
 
-class HalbachConfig(BaseModel):
+class HalbachConfig(StrictModel):
     """Halbach permanent magnet array geometry and tolerances.
 
     Models a K=2 (dipole) Halbach cylinder built from N discrete magnets.
@@ -152,7 +162,7 @@ class HalbachConfig(BaseModel):
         return self.remanence_tesla * geo * seg_factor
 
 
-class DisturbanceConfig(BaseModel):
+class DisturbanceConfig(StrictModel):
     """Interference generator parameters."""
 
     num_modes: int = Field(
@@ -243,7 +253,7 @@ class DisturbanceConfig(BaseModel):
     )
 
 
-class CoilConfig(BaseModel):
+class CoilConfig(StrictModel):
     """Shim coil array parameters."""
 
     num_coils: int = Field(8, ge=4, le=32, description="Number of shim coils")
@@ -270,7 +280,7 @@ class CoilConfig(BaseModel):
     )
 
 
-class NVConfig(BaseModel):
+class NVConfig(StrictModel):
     """NV center spin physics parameters."""
 
     zero_field_splitting_ghz: float = Field(
@@ -331,7 +341,7 @@ class NVConfig(BaseModel):
     )
 
 
-class MaserConfig(BaseModel):
+class MaserConfig(StrictModel):
     """Microwave maser cavity parameters."""
 
     cavity_q: float = Field(
@@ -390,7 +400,7 @@ class MaserConfig(BaseModel):
     )
 
 
-class CavityConfig(BaseModel):
+class CavityConfig(StrictModel):
     """Microwave cavity geometry for threshold and Purcell calculations.
 
     The zero-point magnetic field in the cavity mode sets the single-spin
@@ -419,7 +429,7 @@ class CavityConfig(BaseModel):
     )
 
 
-class OpticalPumpConfig(BaseModel):
+class OpticalPumpConfig(StrictModel):
     """532 nm optical pump parameters for NV population inversion.
 
     The pump laser drives the spin-selective intersystem crossing (ISC)
@@ -515,7 +525,7 @@ class OpticalPumpConfig(BaseModel):
     )
 
 
-class SignalChainConfig(BaseModel):
+class SignalChainConfig(StrictModel):
     """RF signal chain parameters for SNR budget.
 
     Models the complete receiver chain from maser emission to digitised signal:
@@ -594,7 +604,7 @@ class SignalChainConfig(BaseModel):
     )
 
 
-class ModelConfig(BaseModel):
+class ModelConfig(StrictModel):
     """Neural network controller parameters."""
 
     architecture: ModelArchitecture = Field(ModelArchitecture.CNN)
@@ -614,7 +624,7 @@ class ModelConfig(BaseModel):
     lstm_num_layers: int = Field(2, description="Number of LSTM layers")
 
 
-class TrainingConfig(BaseModel):
+class TrainingConfig(StrictModel):
     """Training loop parameters."""
 
     num_samples: int = Field(
@@ -680,7 +690,7 @@ class TrainingConfig(BaseModel):
     )
 
 
-class FeedbackConfig(BaseModel):
+class FeedbackConfig(StrictModel):
     """Closed-loop feedback hardware parameters."""
 
     # ── Hall sensor ────────────────────────────────────────────────
@@ -776,7 +786,7 @@ class FeedbackConfig(BaseModel):
         return self.computation_latency_us + self.dac_settling_time_us
 
 
-class ThermalConfig(BaseModel):
+class ThermalConfig(StrictModel):
     """Thermal coupling parameters.
 
     Models how temperature fluctuations affect every subsystem simultaneously:
@@ -885,7 +895,7 @@ class ThermalConfig(BaseModel):
         return self.ambient_temperature_c - self.reference_temperature_c
 
 
-class VizConfig(BaseModel):
+class VizConfig(StrictModel):
     """Visualization parameters."""
 
     update_interval_ms: int = Field(
@@ -899,7 +909,7 @@ class VizConfig(BaseModel):
     )
 
 
-class MaxwellBlochConfig(BaseModel):
+class MaxwellBlochConfig(StrictModel):
     """Maxwell-Bloch time-domain solver settings.
 
     Controls the semiclassical ODE simulation of cavity–spin dynamics
@@ -947,7 +957,7 @@ class MaxwellBlochConfig(BaseModel):
     )
 
 
-class SpectralConfig(BaseModel):
+class SpectralConfig(StrictModel):
     """Frequency-resolved inversion profile settings.
 
     Models the inhomogeneous spin ensemble as a discrete frequency grid
@@ -1004,7 +1014,7 @@ class SpectralConfig(BaseModel):
     )
 
 
-class DipolarConfig(BaseModel):
+class DipolarConfig(StrictModel):
     """Spin-spin dipolar interaction model settings.
 
     Models the mean-field spectral diffusion caused by direct 1/r³
@@ -1056,7 +1066,7 @@ class DipolarConfig(BaseModel):
     )
 
 
-class SingleSidedMagnetConfig(BaseModel):
+class SingleSidedMagnetConfig(StrictModel):
     """Single-sided permanent magnet array for handheld MRI probe.
 
     Models barrel, U-shaped, or single-sided Halbach magnets that produce
@@ -1134,7 +1144,7 @@ class SingleSidedMagnetConfig(BaseModel):
     )
 
 
-class SurfaceCoilConfig(BaseModel):
+class SurfaceCoilConfig(StrictModel):
     """Flat spiral surface coil for single-sided NMR transmit/receive.
 
     Models a planar multi-turn coil placed on the tissue surface.
@@ -1189,7 +1199,7 @@ class SurfaceCoilConfig(BaseModel):
     )
 
 
-class SusceptibilityConfig(BaseModel):
+class SusceptibilityConfig(StrictModel):
     """Configuration for magnetic susceptibility field-shift modeling."""
 
     enabled: bool = Field(
@@ -1216,7 +1226,7 @@ class SusceptibilityConfig(BaseModel):
     )
 
 
-class DepthProfileConfig(BaseModel):
+class DepthProfileConfig(StrictModel):
     """Configuration for 1D NMR depth profiling simulation."""
 
     max_depth_mm: float = Field(
@@ -1256,7 +1266,36 @@ class DepthProfileConfig(BaseModel):
     )
 
 
-class SimConfig(BaseModel):
+class CalibrationConfig(StrictModel):
+    """Hardware calibration data interface (see nv_maser.calibration).
+
+    Points the twin at measured field maps from the companion
+    nv-maser-hardware repository so they can replace simulation-generated
+    reference fields.
+    """
+
+    calibration_dir: str = Field(
+        "",
+        description=(
+            "Path to nv-maser-hardware/calibration/ with measured FieldMap "
+            ".npz archives. Empty = no hardware data available yet."
+        ),
+    )
+    active_radius_mm: float = Field(
+        3.0,
+        gt=0,
+        description="Active zone radius (mm) for the uniformity ppm metric.",
+    )
+    reference_map_path: str = Field(
+        "",
+        description=(
+            ".npz FieldMap to use as the training reference field. "
+            "Empty = use the simulation-generated base field."
+        ),
+    )
+
+
+class SimConfig(StrictModel):
     """Top-level simulation configuration."""
 
     grid: GridConfig = GridConfig()
@@ -1275,6 +1314,7 @@ class SimConfig(BaseModel):
     feedback: FeedbackConfig = FeedbackConfig()
     thermal: ThermalConfig = ThermalConfig()
     susceptibility: SusceptibilityConfig = SusceptibilityConfig()
+    calibration: CalibrationConfig = CalibrationConfig()
     model: ModelConfig = ModelConfig()
     training: TrainingConfig = TrainingConfig()
     viz: VizConfig = VizConfig()

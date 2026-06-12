@@ -1,10 +1,9 @@
 """
 Tests for src/nv_maser/data/dataset.py
 """
-import pytest
 
-from nv_maser.config import SimConfig, DisturbanceConfig
-from nv_maser.data.dataset import build_dataset, _config_hash
+from nv_maser.config import DisturbanceConfig, SimConfig
+from nv_maser.data.dataset import _config_hash, build_dataset
 
 
 def test_build_dataset_shape(tmp_path):
@@ -49,7 +48,7 @@ def test_force_rebuild(tmp_path):
     """force_rebuild=True regenerates dataset and overwrites cache."""
     config = SimConfig()
 
-    ds1 = build_dataset(config, num_samples=20, cache_dir=tmp_path)
+    build_dataset(config, num_samples=20, cache_dir=tmp_path)
     cache_files_before = list(tmp_path.glob("*.npz"))
     mtime_before = cache_files_before[0].stat().st_mtime
 

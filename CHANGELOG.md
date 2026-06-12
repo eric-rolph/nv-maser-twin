@@ -6,6 +6,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed (maintenance)
+
+- **Windows config loading**: `--config` files are now opened with explicit
+  UTF-8 encoding (`main.py`, `scripts/train_rl.py`). Previously the YAML's
+  non-ASCII characters (Γ, μ, ⟨111⟩) crashed with `UnicodeDecodeError` on
+  systems with a cp1252 locale default.
+- **CLI `--arch lstm`**: the argument parser only accepted `cnn`/`mlp`,
+  rejecting the documented and fully supported LSTM architecture.
+- **`evaluate` divide-by-zero**: improvement factor no longer emits a
+  `RuntimeWarning` when the residual std is zero.
+- **Silent config typos**: all config models now use Pydantic
+  `extra="forbid"`, so unknown YAML keys raise a `ValidationError` instead
+  of being silently ignored.
+- **`calibration:` YAML section**: previously silently dropped (no matching
+  Pydantic model); now validated via a new `CalibrationConfig` on `SimConfig`.
+
+### Changed (maintenance)
+
+- **PyQt6/pyqtgraph moved to a `viz` extra** — they are only needed by the
+  `demo` dashboard. Core installs, CI, and the Docker image no longer pull
+  ~100 MB of Qt. `make install-all` includes the new extra; `nv_maser demo`
+  prints an actionable message if the extra is missing.
+- `pin_memory` in training DataLoaders is now enabled only on CUDA,
+  silencing per-run warnings on CPU.
+- `config/default.yaml` documents previously missing keys (mains hum,
+  transients, DC drift, depth-resolved/pulsed pump, NV orientation/T₁,
+  cavity coupling/Q-boost, pump→thermal coupling).
+- README: corrected test count, removed nonexistent `cavity_qed.py` from the
+  module map, noted all 32 ADRs, documented the `viz` extra.
+
 ### Added (SS28)
 
 - **TAT squeezing** in `squeezing_dynamics.py` — two-axis twisting dynamics

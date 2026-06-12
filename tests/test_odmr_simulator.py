@@ -6,15 +6,14 @@ import pytest
 
 from nv_maser.config import NVConfig
 from nv_maser.physics.odmr_simulator import (
-    ODMRResult,
-    FitResult,
     CrossValidation,
+    FitResult,
+    ODMRResult,
     compute_odmr_spectrum,
-    simulate_odmr_sweep,
-    fit_odmr_spectrum,
     cross_validate_linewidth,
+    fit_odmr_spectrum,
+    simulate_odmr_sweep,
 )
-
 
 # ── Fixtures ──────────────────────────────────────────────────────────
 
@@ -144,7 +143,6 @@ class TestSimulateODMRSweep:
 
     def test_photon_noise_adds_variance(self, nv_config):
         """Poisson noise should increase signal variance."""
-        clean = simulate_odmr_sweep(0.05, nv_config, n_points=501)
         noisy = simulate_odmr_sweep(
             0.05, nv_config, n_points=501,
             photon_count=1000.0, seed=42,

@@ -210,12 +210,11 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    from nv_maser.config import SimConfig
     import yaml as _yaml
 
     cfg = SimConfig()
     if args.config:
-        with open(args.config) as _f:
+        with open(args.config, encoding="utf-8") as _f:
             _overrides = _yaml.safe_load(_f)
         _merged = cfg.model_dump()
         for k, v in (_overrides or {}).items():

@@ -8,8 +8,8 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from torch.utils.data import DataLoader, TensorDataset
 from torch.optim.lr_scheduler import CosineAnnealingLR, StepLR
+from torch.utils.data import DataLoader, TensorDataset
 
 from ..config import SimConfig
 from ..physics.environment import FieldEnvironment
@@ -107,10 +107,11 @@ class Trainer:
             f"(train={train_n}, val={val_n})"
         )
 
+        pin = self.device == "cuda"
         train_loader = DataLoader(
-            train_ds, batch_size=tc.batch_size, shuffle=True, pin_memory=True
+            train_ds, batch_size=tc.batch_size, shuffle=True, pin_memory=pin
         )
-        val_loader = DataLoader(val_ds, batch_size=tc.batch_size, pin_memory=True)
+        val_loader = DataLoader(val_ds, batch_size=tc.batch_size, pin_memory=pin)
         return train_loader, val_loader
 
     def _forward_step(

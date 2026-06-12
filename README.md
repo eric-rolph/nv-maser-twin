@@ -1,6 +1,6 @@
 # NV Maser "Tricorder" Digital Twin
 
-`Python 3.10+` `PyTorch` `FastAPI` `Tests: 576 passed`
+`Python 3.10+` `PyTorch` `FastAPI` `Tests: 2629 passed`
 
 Real-time digital twin of an active magnetic shimming system for a **Nitrogen-Vacancy (NV) center diamond maser** — simulates, trains, serves, and reinforcement-learns a shimming policy that keeps the B₀ field uniform to < 100 ppm.
 
@@ -57,15 +57,20 @@ src/nv_maser/
 │   ├── optical_pump.py     Optical pumping & polarization transfer
 │   ├── thermal.py          Thermal model (pump heating → T₂*/Q degradation)
 │   ├── halbach.py          Halbach multipole field generator
-│   ├── cavity_qed.py       Cavity QED threshold & cooperativity
-│   ├── cavity.py           Magnetic Q, spectral overlap, effective Q, Q-boost
+│   ├── cavity.py           Cavity QED threshold, cooperativity, magnetic Q, Q-boost
 │   ├── signal_chain.py     Signal chain SNR budget + noise temperature
 │   ├── maxwell_bloch.py    5-variable Maxwell-Bloch ODE solver
 │   ├── spectral.py         Frequency-resolved inversion profiles & hole burning
 │   ├── dipolar.py          Spin-spin dipolar interaction & spectral diffusion
 │   ├── spectral_maxwell_bloch.py  Frequency-resolved Maxwell-Bloch solver
 │   ├── pulsed_pump.py      Pulsed optical pump ODE solver
-│   └── closed_loop.py      Time-stepping closed-loop shimming simulator
+│   ├── closed_loop.py      Time-stepping closed-loop shimming simulator
+│   └── … ~40 more          Amplifier, quantum noise, superradiance, squeezing,
+│                           gain lock, shielding, single-sided magnet, depth
+│                           profiling, adapters (magpylib/sigpy/EPG/MRzero),
+│                           phase validators — full map in docs/ARCHITECTURE.md
+├── calibration/
+│   └── field_map.py        FieldMap .npz container for measured hardware fields
 ├── model/
 │   ├── controller.py       CNN / MLP / LSTM controllers + build_controller()
 │   ├── training.py         Supervised training loop, checkpointing, tracker integration
@@ -95,10 +100,10 @@ scripts/
 benchmarks/
 └── benchmark_inference.py  Multi-arch latency benchmark (CNN, MLP, LSTM)
 
-docs/adr/                   Architecture Decision Records (ADR-001 – ADR-004)
+docs/adr/                   Architecture Decision Records (ADR-001 – ADR-032)
 config/default.yaml         Default simulation parameters (YAML, deep-merge)
 experiments/                SQLite runs.db — auto-created on first train
-tests/                      576 passed, 2 skipped (CUDA + onnxruntime)
+tests/                      2629 passed, 75 skipped (CUDA, onnxruntime, optional libs)
 checkpoints/                Saved model weights + optional model.onnx (git-ignored)
 ```
 
@@ -188,7 +193,7 @@ print(summary)  # mean_variance, mean_gain_budget, masing_fraction, ...
 ### Tests and benchmarks
 
 ```bash
-make test                               # 576 passed, 2 skipped
+make test                               # 2629 passed, 75 skipped
 make test-cov                           # HTML coverage report in htmlcov/
 make lint                               # ruff check
 make benchmark                          # multi-arch latency table
@@ -334,6 +339,8 @@ coils:
 
 ## Architecture Decision Records
 
+32 ADRs live in [docs/adr/](docs/adr/) covering controller design, API hardening, RL environment, physics models (quantum noise, superradiance, Q-boost, shielding, …), and milestone validators. Foundational ones:
+
 | ADR | Title | Decision |
 |---|---|---|
 | [ADR-001](docs/adr/ADR-001-controller-architecture.md) | Controller Architecture — CNN vs MLP | CNN is default; MLP/LSTM via `--arch` |
@@ -348,7 +355,7 @@ coils:
 
 ```bash
 # Install everything
-make install-all          # dev + api + onnx extras
+make install-all          # dev + api + onnx + viz extras
 
 # Common tasks
 make test                 # pytest -q
@@ -370,6 +377,7 @@ pre-commit install
 |---|---|---|
 | `dev` | pytest, pytest-cov, httpx, jupyter, pre-commit | Testing and notebooks |
 | `api` | fastapi, uvicorn[standard] | REST inference server |
+| `viz` | pyqtgraph, PyQt6 | Real-time `demo` dashboard |
 | `onnx` | onnxscript, onnxruntime | ONNX export + runtime verification |
 
 ### Structured logging

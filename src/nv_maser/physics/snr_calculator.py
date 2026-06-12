@@ -52,15 +52,17 @@ from dataclasses import dataclass
 import numpy as np
 from numpy.typing import NDArray
 
-from .surface_coil import SurfaceCoil, sensitivity_on_axis, compute_noise
-from .single_sided_magnet import SingleSidedMagnet
-from .depth_profile import TissueLayer
-from .pulse_sequence import simulate_spin_echo, simulate_gre
-from .up_conversion import MixerSpec, DEFAULT_MIXER, friis_system_temperature_with_mixer
-from .signal_chain import compute_maser_noise_temperature
+from .constants import HBAR as _HBAR
+from .constants import KB as _KB
 
 # ── Physical constants ────────────────────────────────────────────
-from .constants import MU0 as _MU0, KB as _KB, HBAR as _HBAR
+from .depth_profile import TissueLayer
+from .pulse_sequence import simulate_gre, simulate_spin_echo
+from .signal_chain import compute_maser_noise_temperature
+from .single_sided_magnet import SingleSidedMagnet
+from .surface_coil import SurfaceCoil, compute_noise, sensitivity_on_axis
+from .up_conversion import DEFAULT_MIXER, MixerSpec, friis_system_temperature_with_mixer
+
 _GAMMA_P = 2.675e8                   # proton gyromagnetic ratio (rad/s/T)
 _N_PROTONS_WATER = 6.69e28           # proton number density in water (m⁻³)
 _T0 = 290.0                          # IEEE reference temperature (K)
@@ -330,7 +332,6 @@ def compute_snr_budget(
     # Without maser: conventional LNA (NF = 1 dB, T_amp ≈ 75 K)
     # SNR_conv ∝ 1/sqrt(T_coil + T_lna) ; SNR_maser ∝ 1/sqrt(T_coil + T_maser)
     t_lna_conventional = _T0 * (10.0 ** (lna_noise_figure_db / 10.0) - 1.0)
-    t_coil = coil.config.temperature_k
     # Simplified: compare only LNA contribution
     noise_conv_total2 = noise_coil_v**2 + math.sqrt(
         4 * _KB * t_lna_conventional * r_coil * bandwidth_hz

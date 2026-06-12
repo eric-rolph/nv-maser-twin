@@ -28,6 +28,16 @@ disturbance:
   min_spatial_freq: 0.1   # low-freq sinusoids are well-approximated by gradient harmonics
   max_spatial_freq: 1.5
   temporal_drift_rate: 0.1
+  # realistic interference modes (all off by default)
+  mains_hum_enabled: false
+  mains_hum_frequency_hz: 50.0       # 50 Hz EU/Asia, 60 Hz US/JP
+  mains_hum_amplitude_tesla: 1.0e-6  # typical lab: 0.1-10 μT
+  transient_enabled: false
+  transient_rate_hz: 0.01            # Poisson rate of spikes
+  transient_amplitude_tesla: 5.0e-4
+  transient_decay_time_s: 0.1
+  dc_drift_enabled: false
+  dc_drift_rate_tesla_per_s: 1.0e-6
   seed: 42  # fixed seed for reproducible training datasets
 
 coils:
@@ -42,12 +52,17 @@ nv:
   t2_star_us: 1.0             # T2* dephasing time; Γ_h = 1/(π·T2*) ≈ 0.318 MHz
   nv_density_per_cm3: 1.0e+17  # ~0.6 ppm NV concentration
   pump_efficiency: 0.5         # fraction of NVs inverted
+  orientation_fraction: 0.25   # 1 of 4 ⟨111⟩ axes resonant with B₀
+  t1_ms: 5.0                   # spin-lattice relaxation at room temp
   diamond_thickness_mm: 0.5
 
 maser:
   cavity_q: 10000
   cavity_frequency_ghz: 1.47   # D - γe·B₀ = 2.87 - 28.025×0.05 ≈ 1.47 GHz
   min_gain_budget: 0.5         # maser needs ≥50% of peak gain
+  coupling_beta: 0.5           # cavity coupling factor (0.5 = critical)
+  q_boost_gain: 0.0            # electronic Q-boost loop gain (0 = off, <1)
+  maser_probe_power_dbm: -120.0  # small-signal probe reference (Wang 2024)
 
 feedback:
   sensor_noise_tesla: 1.0e-7   # 100 nT Hall sensor noise (conservative)
@@ -71,6 +86,10 @@ optical_pump:
   absorption_cross_section_m2: 3.1e-21  # NV⁻ at 532 nm
   quantum_defect_fraction: 0.6       # heat fraction of absorbed power
   spin_t1_ms: 5.0                    # ground-state T₁ at room temp
+  n_depth_slices: 1                  # >1 enables depth-resolved Beer-Lambert pump
+  pulsed: false                      # true = pulsed pump mode (Long 2025)
+  pulse_duration_us: 100.0           # pump ON time per cycle
+  pulse_period_us: 1000.0            # pulse repetition period
 
 signal_chain:
   lna_noise_figure_db: 1.0           # room-temp GaAs LNA
@@ -90,6 +109,8 @@ thermal:
   coil_tempco_per_c: 0.004           # copper coil resistivity tempco
   thermal_drift_rate_c_per_s: 0.01   # slow environmental drift
   thermal_noise_std_c: 0.1           # thermal fluctuation noise σ
+  external_heat_w: 0.0               # pump heat into diamond (closes pump→thermal loop)
+  thermal_resistance_c_per_w: 5.0    # diamond → heat sink (°C/W)
 
 model:
   architecture: cnn       # cnn | mlp | lstm
@@ -127,5 +148,10 @@ calibration:
   calibration_dir: ""          # path to nv-maser-hardware/calibration/ (empty = not yet available)
   active_radius_mm: 3.0        # active zone radius for uniformity ppm metric
   reference_map_path: ""       # .npz FieldMap to use as training reference (empty = simulation-generated)
+
+# Advanced physics sections use their config.py defaults unless overridden here:
+#   maxwell_bloch, spectral, dipolar, susceptibility,
+#   single_sided_magnet, surface_coil, depth_profile
+# Unknown keys are rejected (extra="forbid"), so typos fail loudly.
 
 device: auto

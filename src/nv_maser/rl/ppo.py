@@ -16,17 +16,18 @@ Usage:
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field as dc_field
+from dataclasses import dataclass
+from dataclasses import field as dc_field
+from typing import Any
 
 import numpy as np
 import torch
 import torch.nn as nn
 from torch.distributions import Normal
 
-from ..config import CoilConfig, ModelConfig, ModelArchitecture, SimConfig
+from ..config import CoilConfig, ModelConfig, SimConfig
 from ..model.controller import build_controller
 from .env import ShimmingEnv
-
 
 # ═══════════════════════════════════════════════════════════════════════
 # Actor-Critic network
@@ -241,7 +242,7 @@ class PPOTrainer:
         self,
         sim_config: SimConfig | None = None,
         ppo_config: PPOConfig | None = None,
-        tracker: "Any | None" = None,
+        tracker: Any | None = None,
     ) -> None:
         self.sim_cfg = sim_config or SimConfig()
         self.ppo_cfg = ppo_config or PPOConfig()

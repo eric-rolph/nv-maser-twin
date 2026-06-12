@@ -2,32 +2,32 @@
 from __future__ import annotations
 
 import math
-import pytest
+
 import numpy as np
+import pytest
 
 from nv_maser.physics.planar_gradient import (
+    DEFAULT_GX,
+    DEFAULT_GY,
     GradientCoilSpec,
-    GradientWaveform,
     GradientPulseResult,
-    PhaseEncodeScheme,
-    compute_gradient_efficiency,
+    GradientWaveform,
+    build_phase_encode_scheme,
     compute_coil_resistance,
+    compute_gradient_efficiency,
     compute_inductance,
-    compute_power_dissipation,
-    compute_max_gradient,
-    current_for_gradient,
     compute_k_position,
     compute_k_trajectory,
+    compute_max_gradient,
+    compute_power_dissipation,
+    current_for_gradient,
     evaluate_waveform,
-    build_phase_encode_scheme,
     gradient_field_1d,
     linearity_error,
     sweep_efficiency_vs_radius,
-    sweep_max_gradient_vs_current,
     sweep_k_max_vs_fov,
+    sweep_max_gradient_vs_current,
     sweep_resolution_vs_n_lines,
-    DEFAULT_GX,
-    DEFAULT_GY,
 )
 
 # ── Constants ──────────────────────────────────────────────────────
@@ -203,8 +203,8 @@ class TestInductance:
 
     def test_microhenry_range(self):
         """Surface coil inductance: ~1–100 µH."""
-        l = compute_inductance(DEFAULT_GX)
-        assert 0.1e-6 <= l <= 500e-6  # H
+        inductance = compute_inductance(DEFAULT_GX)
+        assert 0.1e-6 <= inductance <= 500e-6  # H
 
 
 # ╔══════════════════════════════════════════════════════════════════╗

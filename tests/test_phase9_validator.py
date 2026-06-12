@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import math
+
 import pytest
 
 from nv_maser.physics.depth_profile import FOREARM_LAYERS, TissueLayer
@@ -11,7 +12,6 @@ from nv_maser.physics.phase9_validator import (
     T2ContrastResult,
     validate_phase9_milestone,
 )
-
 
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║  Helpers / shared fixtures                                       ║
@@ -277,6 +277,7 @@ class TestT2ContrastPhysics:
         """The ratio-of-ratios (long-TE / short-TE) cancels depth-dependent coil
         sensitivity and should match pure T2-decay physics to within 10%."""
         import math as _math
+
         import numpy as np
         r = _default_result()
         cfg = r.config
@@ -479,19 +480,19 @@ class TestCustomTissueLayers:
     def test_depth_profiles_correct_depths(self):
         """Short-TE and long-TE profiles should span the same depth range."""
         r = _default_result()
-        import numpy as np
         assert r.profile_short.depths_mm[-1] == pytest.approx(r.profile_long.depths_mm[-1])
         assert len(r.profile_short.depths_mm) == len(r.profile_long.depths_mm)
 
-    def test_milestone_closed_false_when_all_fail(self):
-        cfg = Phase9Config(
+    def test_zero_scan_time_limit_rejected(self):
+        # Extreme-but-positive thresholds are valid…
+        Phase9Config(
             t2_contrast_ratio_threshold=1000.0,
             snr_threshold=1000.0,
             scan_time_limit_s=0.001,
         )
+        # …but a zero scan-time limit fails Phase9Config validation
         with pytest.raises(ValueError):
-            # scan_time_limit_s=0.001 triggers Phase9Config validation
-            _ = Phase9Config(scan_time_limit_s=0.0)
+            Phase9Config(scan_time_limit_s=0.0)
 
     def test_milestone_closed_false_only_contrast_fails(self):
         cfg = Phase9Config(t2_contrast_ratio_threshold=1000.0)

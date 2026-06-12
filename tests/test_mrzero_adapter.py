@@ -11,22 +11,21 @@ import math
 import numpy as np
 import pytest
 
+from nv_maser.physics.depth_profile import (
+    FOREARM_LAYERS,
+    TissueLayer,
+)
 from nv_maser.physics.mrzero_adapter import (
     MRZERO_AVAILABLE,
     BlochSignal,
     DepthValidation,
     build_single_voxel_phantom,
     build_spin_echo_sequence,
-    simulate_single_voxel_bloch,
     compute_analytical_contrast,
-    simulate_depth_bloch,
-    cross_validate_depth,
     cross_validate_contrast,
-)
-from nv_maser.physics.depth_profile import (
-    TissueLayer,
-    FOREARM_LAYERS,
-    HEMORRHAGE_LAYERS,
+    cross_validate_depth,
+    simulate_depth_bloch,
+    simulate_single_voxel_bloch,
 )
 
 pytestmark = pytest.mark.skipif(
@@ -105,7 +104,6 @@ class TestBuildSequence:
 
     def test_adc_count(self):
         seq = build_spin_echo_sequence(te_s=0.01, tr_s=0.1, n_repetitions=3)
-        import torch
         adc_total = sum(
             int((rep.adc_usage > 0).sum().item()) for rep in seq
         )
@@ -223,8 +221,8 @@ class TestAnalyticalContrast:
             te_s=0.01, tr_s=0.1,
         )
         # First 10mm = water, next 10mm = fat
-        assert all(l == "water" for l in labels[:10])
-        assert all(l == "fat" for l in labels[10:])
+        assert all(label == "water" for label in labels[:10])
+        assert all(label == "fat" for label in labels[10:])
 
     def test_contrast_formula(self):
         """Verify the contrast formula for a single tissue type."""

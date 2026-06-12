@@ -72,7 +72,7 @@ def test_onnx_runtime_inference(tmp_path, default_config):
     import numpy as np
 
     out = tmp_path / "rt_model.onnx"
-    result = export_model(default_config, output_path=out, checkpoint_path=None)
+    export_model(default_config, output_path=out, checkpoint_path=None)
 
     sess = ort.InferenceSession(str(out))
     dummy = np.random.randn(1, 1, 64, 64).astype(np.float32)

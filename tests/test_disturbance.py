@@ -3,8 +3,12 @@ import numpy as np
 import pytest
 
 from nv_maser.config import DisturbanceConfig, GridConfig
+from nv_maser.physics.disturbance import (
+    DisturbanceGenerator,
+    ImagingMagnetDisturbanceConfig,
+    compute_imaging_magnet_stray_field,
+)
 from nv_maser.physics.grid import SpatialGrid
-from nv_maser.physics.disturbance import DisturbanceGenerator
 
 
 @pytest.fixture
@@ -184,11 +188,6 @@ def test_transient_disabled_by_default(grid: SpatialGrid) -> None:
 # ═══════════════════════════════════════════════════════════════════════
 # Imaging-magnet stray field — §11.1 extension
 # ═══════════════════════════════════════════════════════════════════════
-
-from nv_maser.physics.disturbance import (
-    ImagingMagnetDisturbanceConfig,
-    compute_imaging_magnet_stray_field,
-)
 
 
 def test_imaging_magnet_config_defaults() -> None:

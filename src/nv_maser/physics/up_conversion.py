@@ -40,13 +40,12 @@ Friis — "Noise Figures of Radio Receivers", Proc. IRE 32, 419 (1944).
 """
 from __future__ import annotations
 
-import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+
+from .constants import KB as _KB
 
 # ── Physical constants ────────────────────────────────────────────
 _T0 = 290.0  # IEEE reference temperature (K)
-from .constants import KB as _KB
-
 
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║  Data classes                                                    ║

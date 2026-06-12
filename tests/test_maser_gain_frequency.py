@@ -15,6 +15,8 @@ import math
 import numpy as np
 import pytest
 
+from nv_maser.config import CavityConfig, MaserConfig, NVConfig
+from nv_maser.physics.amplifier import compute_maser_gain
 from nv_maser.physics.maser_gain_frequency import (
     GainCurveResult,
     bandwidth_analytical,
@@ -24,8 +26,6 @@ from nv_maser.physics.maser_gain_frequency import (
     compute_saturation_power,
     gain_curve_from_mb_result,
 )
-from nv_maser.physics.amplifier import compute_maser_gain
-from nv_maser.config import CavityConfig, MaserConfig, NVConfig
 
 # ── Wang 2024 reference parameters ───────────────────────────────
 _FC = 2.87e9          # Hz  (NV maser cavity frequency)
@@ -524,21 +524,23 @@ class TestGainCurveFromMBResult:
 
     def _make_mock_mb_result(self):
         """Build a minimal SpectralMBResult using the real solver (above-threshold)."""
-        from nv_maser.physics.spectral_maxwell_bloch import solve_spectral_maxwell_bloch
         from nv_maser.config import (
-            MaxwellBlochConfig, SpectralConfig, DipolarConfig,
+            DipolarConfig,
+            MaxwellBlochConfig,
+            SpectralConfig,
         )
+        from nv_maser.physics.spectral_maxwell_bloch import solve_spectral_maxwell_bloch
 
         nv = _nv_cfg()
         maser = _maser_cfg(cavity_q=10_000, cavity_frequency_ghz=1.47)
         cavity = _cavity_cfg()
 
-        mb_cfg = MaxwellBlochConfig(duration_us=50.0, dt_ns=5.0)
+        mb_cfg = MaxwellBlochConfig(t_max_us=50.0)
         sp_cfg = SpectralConfig(
             inhomogeneous_linewidth_mhz=1.0,
-            n_bins=11,
+            n_freq_bins=11,
         )
-        dip_cfg = DipolarConfig(enabled=False)
+        dip_cfg = DipolarConfig(enable=False)
 
         return (
             solve_spectral_maxwell_bloch(
@@ -556,8 +558,9 @@ class TestGainCurveFromMBResult:
         cavity_q = 7000 → Q_L = 7000 < 7788, so device is below oscillation
         threshold and the gain curve is valid.
         """
-        from nv_maser.physics.spectral_maxwell_bloch import SpectralMBResult
         import numpy as _np
+
+        from nv_maser.physics.spectral_maxwell_bloch import SpectralMBResult
 
         nv = _nv_cfg()
         maser = _maser_cfg(cavity_q=7_000, cavity_frequency_ghz=1.47)

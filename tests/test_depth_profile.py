@@ -10,18 +10,17 @@ from nv_maser.config import (
     SurfaceCoilConfig,
 )
 from nv_maser.physics.depth_profile import (
-    TissueLayer,
-    DepthProfile,
     FOREARM_LAYERS,
     HEMORRHAGE_LAYERS,
-    _equilibrium_magnetisation,
+    DepthProfile,
+    TissueLayer,
     _assign_layers,
-    simulate_depth_profile,
+    _equilibrium_magnetisation,
     add_noise,
+    simulate_depth_profile,
 )
 from nv_maser.physics.single_sided_magnet import SingleSidedMagnet
 from nv_maser.physics.surface_coil import SurfaceCoil
-
 
 # ── Fixtures ──────────────────────────────────────────────────────
 
@@ -77,19 +76,19 @@ class TestPresetLayers:
         assert len(HEMORRHAGE_LAYERS) == 4
 
     def test_forearm_layer_names(self) -> None:
-        names = [l.name for l in FOREARM_LAYERS]
+        names = [layer.name for layer in FOREARM_LAYERS]
         assert "skin" in names
         assert "muscle" in names
         assert "bone_cortex" in names
 
     def test_hemorrhage_layer_names(self) -> None:
-        names = [l.name for l in HEMORRHAGE_LAYERS]
+        names = [layer.name for layer in HEMORRHAGE_LAYERS]
         assert "hemorrhage" in names
 
     def test_hemorrhage_t2_longer_than_surrounding(self) -> None:
         """Hemorrhage has high T2 (~150 ms) vs. muscle (~35 ms)."""
-        hem = next(l for l in HEMORRHAGE_LAYERS if l.name == "hemorrhage")
-        muscle = next(l for l in HEMORRHAGE_LAYERS if l.name == "muscle")
+        hem = next(layer for layer in HEMORRHAGE_LAYERS if layer.name == "hemorrhage")
+        muscle = next(layer for layer in HEMORRHAGE_LAYERS if layer.name == "muscle")
         assert hem.t2_ms > muscle.t2_ms
 
     def test_all_thicknesses_positive(self) -> None:
@@ -146,7 +145,7 @@ class TestAssignLayers:
 
     def test_beyond_all_layers(self) -> None:
         """Depths beyond total thickness use last layer."""
-        total = sum(l.thickness_mm for l in FOREARM_LAYERS)
+        total = sum(layer.thickness_mm for layer in FOREARM_LAYERS)
         depths = np.array([total + 5.0])
         result = _assign_layers(depths, FOREARM_LAYERS)
         assert result[0]["name"] == FOREARM_LAYERS[-1].name

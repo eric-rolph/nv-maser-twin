@@ -11,7 +11,7 @@ install:  ## Install package with dev+api extras
 	pip install -e ".[dev,api]"
 
 install-all:  ## Install package with all optional extras
-	pip install -e ".[dev,api,onnx]"
+	pip install -e ".[dev,api,onnx,viz]"
 
 test:  ## Run full test suite
 	python -m pytest -q

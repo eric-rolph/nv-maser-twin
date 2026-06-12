@@ -1,5 +1,4 @@
 """Tests for the Maxwell-Bloch time-domain solver."""
-import math
 
 import numpy as np
 import pytest
@@ -16,7 +15,6 @@ from nv_maser.physics.maxwell_bloch import (
     compute_steady_state_power,
     solve_maxwell_bloch,
 )
-
 
 # ── Fixtures ──────────────────────────────────────────────────────
 
@@ -319,7 +317,7 @@ class TestEnvironmentIntegration:
 
         config = SimConfig()  # maxwell_bloch.enable defaults to False
         env = FieldEnvironment(config)
-        field = env.step(0.0)
+        env.step(0.0)
         net = env.apply_correction(np.zeros(config.coils.num_coils, dtype=np.float32))
         metrics = env.compute_uniformity_metric(net)
         assert "mb_output_power_w" not in metrics
@@ -334,7 +332,7 @@ class TestEnvironmentIntegration:
             ),
         )
         env = FieldEnvironment(config)
-        field = env.step(0.0)
+        env.step(0.0)
         net = env.apply_correction(np.zeros(config.coils.num_coils, dtype=np.float32))
         metrics = env.compute_uniformity_metric(net)
         assert "mb_output_power_w" in metrics
