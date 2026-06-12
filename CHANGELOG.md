@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added (calibration wiring)
+
+- **`calibration.reference_map_path` is now functional**: when set,
+  `FieldEnvironment` loads the FieldMap .npz, validates its nominal B₀
+  against `field.b0_tesla` (>5% mismatch raises), regrids it onto the
+  simulation grid if needed, and uses it as the base field. Training data,
+  closed-loop simulation, and RL all run on the measured field.
+- `load_reference_base_field()` in `nv_maser.calibration`.
+- New CLI subcommand `python -m nv_maser fieldmap` — exports the simulated
+  B₀ as a FieldMap .npz (the hardware commissioning reference), printing
+  size, B₀, and active-zone uniformity in ppm.
+- `tests/test_field_map.py` — 26 tests covering the previously untested
+  FieldMap container (save/load/regrid/compare/uniformity) and the new
+  reference-map wiring end to end.
+
 ### Fixed (maintenance)
 
 - **Windows config loading**: `--config` files are now opened with explicit

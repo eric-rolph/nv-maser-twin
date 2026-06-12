@@ -159,7 +159,16 @@ class FieldEnvironment:
     def __init__(self, config: SimConfig, thermal_seed: int | None = None) -> None:
         self.config = config
         self.grid = SpatialGrid(config.grid)
-        self.base_field = compute_base_field(self.grid, config.field, config.halbach)
+        if config.calibration.reference_map_path:
+            # Measured hardware map replaces the simulated B₀ (lazy import:
+            # calibration depends on physics, so avoid a cycle at import time).
+            from ..calibration.field_map import load_reference_base_field
+
+            self.base_field = load_reference_base_field(config, self.grid)
+        else:
+            self.base_field = compute_base_field(
+                self.grid, config.field, config.halbach
+            )
         self.disturbance_gen = DisturbanceGenerator(self.grid, config.disturbance)
         self.coils = ShimCoilArray(self.grid, config.coils)
 

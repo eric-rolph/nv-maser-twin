@@ -23,13 +23,18 @@ See nv-maser-hardware/calibration/FORMAT.md for full details.
 """
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 from numpy.typing import NDArray
 from scipy.interpolate import RegularGridInterpolator
+
+if TYPE_CHECKING:
+    from ..config import SimConfig
+    from ..physics.grid import SpatialGrid
 
 
 @dataclass
@@ -283,8 +288,73 @@ def regrid(
     )
 
 
+def load_reference_base_field(
+    config: SimConfig,
+    grid: SpatialGrid,
+) -> NDArray[np.float32]:
+    """Load the configured reference FieldMap as the simulation base field.
+
+    Reads ``config.calibration.reference_map_path``, validates that the map's
+    nominal B₀ matches the simulation's ``field.b0_tesla`` (the maser physics
+    derives NV transition frequencies from the config value), and regrids the
+    map onto the simulation grid if its axes differ.
+
+    Args:
+        config:  SimConfig with a non-empty calibration.reference_map_path.
+        grid:    Target SpatialGrid the field must be sampled on.
+
+    Returns:
+        (size, size) float32 base field in Tesla on the simulation grid.
+
+    Raises:
+        FileNotFoundError: reference_map_path does not exist.
+        ValueError: map nominal B₀ deviates >5% from field.b0_tesla.
+    """
+    path = Path(config.calibration.reference_map_path)
+    if not path.exists():
+        raise FileNotFoundError(
+            f"calibration.reference_map_path not found: {path}. "
+            "Generate one with `python -m nv_maser fieldmap` or point at a "
+            "measured map from nv-maser-hardware/calibration/."
+        )
+
+    fm = load_field_map(path)
+
+    b0_cfg = config.field.b0_tesla
+    rel_diff = abs(fm.b0_nominal_tesla - b0_cfg) / b0_cfg
+    if rel_diff > 0.05:
+        raise ValueError(
+            f"Reference map nominal B0 = {fm.b0_nominal_tesla:.4g} T differs "
+            f"from field.b0_tesla = {b0_cfg:.4g} T by {rel_diff:.1%} (> 5%). "
+            "Update field.b0_tesla to match the measured magnet so the NV "
+            "transition frequencies stay consistent."
+        )
+
+    x_mm = grid.x[0, :].astype(np.float32)
+    y_mm = grid.y[:, 0].astype(np.float32)
+
+    same_grid = (
+        fm.shape == (len(y_mm), len(x_mm))
+        and np.allclose(fm.x_mm, x_mm)
+        and np.allclose(fm.y_mm, y_mm)
+    )
+    if not same_grid:
+        if fm.x_mm.min() > x_mm.min() or fm.x_mm.max() < x_mm.max() or \
+           fm.y_mm.min() > y_mm.min() or fm.y_mm.max() < y_mm.max():
+            logging.getLogger(__name__).warning(
+                "Reference map extent (x=[%.1f, %.1f], y=[%.1f, %.1f] mm) does "
+                "not cover the simulation grid (±%.1f mm); edge values are "
+                "extrapolated.",
+                fm.x_mm.min(), fm.x_mm.max(), fm.y_mm.min(), fm.y_mm.max(),
+                x_mm.max(),
+            )
+        fm = regrid(fm, x_mm, y_mm)
+
+    return fm.b_z.astype(np.float32)
+
+
 def simulated_field_map(
-    config: "SimConfig",  # noqa: F821 – forward reference
+    config: SimConfig,
     *,
     add_disturbance: bool = False,
     disturbance_seed: int | None = None,

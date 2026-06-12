@@ -44,6 +44,48 @@ def test_config_hash_changes_with_params():
     assert _config_hash(config1) != _config_hash(config2)
 
 
+def test_config_hash_changes_with_halbach():
+    """Halbach toggles change the base field, so they must change the hash."""
+    config1 = SimConfig()
+    config2 = SimConfig(halbach={"enabled": True})
+
+    assert _config_hash(config1) != _config_hash(config2)
+
+
+def test_config_hash_tracks_reference_map_content(tmp_path):
+    """Cache key follows the reference map's CONTENT, not just its path."""
+    import numpy as np
+
+    from nv_maser.calibration import FieldMap, save_field_map
+
+    ax = np.linspace(-5.0, 5.0, 64, dtype=np.float32)
+
+    def _save(b0_value: float) -> None:
+        fm = FieldMap(
+            b_z=np.full((64, 64), b0_value, dtype=np.float32),
+            x_mm=ax,
+            y_mm=ax.copy(),
+            b0_nominal_tesla=0.05,
+            active_radius_mm=3.0,
+        )
+        save_field_map(tmp_path / "ref.npz", fm)
+
+    config = SimConfig(
+        calibration={"reference_map_path": str(tmp_path / "ref.npz")}
+    )
+
+    no_map_hash = _config_hash(SimConfig())
+
+    _save(0.05)
+    hash_a = _config_hash(config)
+
+    _save(0.0501)  # re-measured map, same path
+    hash_b = _config_hash(config)
+
+    assert no_map_hash != hash_a, "Setting a reference map must change the hash"
+    assert hash_a != hash_b, "Rewriting the map file must change the hash"
+
+
 def test_force_rebuild(tmp_path):
     """force_rebuild=True regenerates dataset and overwrites cache."""
     config = SimConfig()

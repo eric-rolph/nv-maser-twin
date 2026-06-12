@@ -7,6 +7,7 @@ Usage::
     python -m nv_maser demo               # Run the real-time dashboard with trained model
     python -m nv_maser evaluate           # Run evaluation metrics on test disturbances
     python -m nv_maser visualize-coils    # Show coil influence matrix plots
+    python -m nv_maser fieldmap           # Export simulated B0 as a FieldMap .npz
 """
 from __future__ import annotations
 
@@ -111,6 +112,28 @@ def cmd_visualize_coils(config: SimConfig) -> None:
     plt.show()
 
 
+def cmd_fieldmap(config: SimConfig, args) -> None:
+    from .calibration import save_field_map, simulated_field_map, uniformity_ppm
+
+    fm = simulated_field_map(
+        config,
+        add_disturbance=args.add_disturbance,
+        disturbance_seed=args.seed,
+    )
+    save_field_map(args.output, fm)
+    ppm = uniformity_ppm(fm)
+    print(f"[fieldmap] Wrote {fm.width}x{fm.height} simulation reference -> {args.output}")
+    print(
+        f"           B0={fm.b0_nominal_tesla:.4g} T | "
+        f"active radius={fm.active_radius_mm:.1f} mm | "
+        f"uniformity={ppm:.1f} ppm"
+    )
+    print(
+        "           Use it via config: calibration.reference_map_path: "
+        f"{args.output}"
+    )
+
+
 def cmd_dataset(config: SimConfig, args) -> None:
     from .data.dataset import build_dataset
 
@@ -154,6 +177,23 @@ def main() -> None:
                                  help="Directory for cached .npz files")
     dataset_parser.add_argument("--force-rebuild", action="store_true",
                                  help="Ignore cache and rebuild from scratch")
+
+    fieldmap_parser = subparsers.add_parser(
+        "fieldmap",
+        help="Export the simulated B0 field as a FieldMap .npz (hardware commissioning reference)",
+    )
+    fieldmap_parser.add_argument(
+        "--output", type=str, default="field_map.npz",
+        help="Output .npz path (default: field_map.npz)"
+    )
+    fieldmap_parser.add_argument(
+        "--add-disturbance", action="store_true",
+        help="Superimpose one synthetic disturbance sample"
+    )
+    fieldmap_parser.add_argument(
+        "--seed", type=int, default=None,
+        help="Disturbance seed (with --add-disturbance)"
+    )
 
     serve_parser = subparsers.add_parser("serve", help="Launch FastAPI inference server")
     serve_parser.add_argument(
@@ -205,6 +245,10 @@ def main() -> None:
 
     if args.command == "dataset":
         cmd_dataset(config, args)
+        return
+
+    if args.command == "fieldmap":
+        cmd_fieldmap(config, args)
         return
 
     if args.command == "export":

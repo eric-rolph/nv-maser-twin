@@ -24,15 +24,25 @@ logger = logging.getLogger("nv_maser.data")
 
 def _config_hash(config: SimConfig) -> str:
     """
-    Compute a short hash of the config fields that affect dataset content.
-    Only grid, disturbance, field, and coil configs matter — not training params.
+    Compute a short hash of the config fields that affect dataset content:
+    everything that shapes the base field (field, halbach, calibration map)
+    plus grid, disturbance, and coils — not training params.
     """
     relevant = {
         "grid": config.grid.model_dump(),
         "disturbance": config.disturbance.model_dump(),
         "field": config.field.model_dump(),
+        "halbach": config.halbach.model_dump(),
         "coils": config.coils.model_dump(),
     }
+    # Hash the reference map's CONTENT, not its path: a re-measured map
+    # saved to the same file must invalidate the cache.
+    ref_path = config.calibration.reference_map_path
+    if ref_path:
+        p = Path(ref_path)
+        relevant["reference_map_sha256"] = (
+            hashlib.sha256(p.read_bytes()).hexdigest() if p.exists() else ref_path
+        )
     # Deterministic JSON → SHA256 → first 12 hex chars
     blob = json.dumps(relevant, sort_keys=True, default=str)
     return hashlib.sha256(blob.encode()).hexdigest()[:12]

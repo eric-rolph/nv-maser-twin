@@ -70,7 +70,8 @@ src/nv_maser/
 │                           profiling, adapters (magpylib/sigpy/EPG/MRzero),
 │                           phase validators — full map in docs/ARCHITECTURE.md
 ├── calibration/
-│   └── field_map.py        FieldMap .npz container for measured hardware fields
+│   └── field_map.py        FieldMap .npz container — measured maps replace the
+│                           simulated B₀ via calibration.reference_map_path
 ├── model/
 │   ├── controller.py       CNN / MLP / LSTM controllers + build_controller()
 │   ├── training.py         Supervised training loop, checkpointing, tracker integration
@@ -87,7 +88,7 @@ src/nv_maser/
 │   └── tracker.py          SQLite experiment tracker (stdlib sqlite3)
 ├── data/
 │   └── dataset.py          Content-addressed .npz dataset cache (SHA-256)
-└── main.py                 CLI: train / demo / evaluate / dataset / export / serve
+└── main.py                 CLI: train / demo / evaluate / dataset / export / serve / fieldmap
 
 scripts/
 ├── train_rl.py             REINFORCE policy-gradient baseline
@@ -334,6 +335,31 @@ training:
 coils:
   num_coils: 16
 ```
+
+---
+
+### Measured field maps (hardware in the loop)
+
+The twin can train and evaluate against a **measured** B₀ map instead of the simulated one — this is how data from [`nv-maser-hardware`](https://github.com/eric-rolph/nv-maser-hardware) closes the simulation↔reality gap.
+
+```bash
+# 1. Export the simulation reference map (hardware commissioning baseline)
+python -m nv_maser fieldmap --output calibration/reference_map.npz
+
+# 2. Hardware team measures the real magnet and saves a FieldMap .npz
+#    (same schema — see nv-maser-hardware/calibration/FORMAT.md)
+
+# 3. Point the twin at the measured map
+python -m nv_maser train --config my_config.yaml
+```
+
+```yaml
+# my_config.yaml
+calibration:
+  reference_map_path: path/to/measured_map.npz
+```
+
+The map is validated (nominal B₀ must be within 5% of `field.b0_tesla`) and regridded onto the simulation grid if its axes differ. Everything downstream — training data, closed-loop simulation, RL — then runs on the measured field. Compare maps programmatically with `nv_maser.calibration.compare_maps`.
 
 ---
 
