@@ -3,8 +3,12 @@ from __future__ import annotations
 
 import pytest
 
-from nv_maser.config import ModelArchitecture, ModelConfig, SimConfig
-from nv_maser.export import OnnxExportResult, export_model
+# torch.onnx.export needs the optional onnxscript package ([onnx] extra);
+# skip the whole module when it is not installed.
+pytest.importorskip("onnxscript")
+
+from nv_maser.config import ModelArchitecture, ModelConfig, SimConfig  # noqa: E402
+from nv_maser.export import OnnxExportResult, export_model  # noqa: E402
 
 
 @pytest.fixture

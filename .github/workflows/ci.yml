@@ -37,8 +37,8 @@ jobs:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('pyproject.toml') }}
 
-      - name: Install package with dev and api dependencies
-        run: pip install -e ".[dev,api]"
+      - name: Install package with dev, api, and onnx dependencies
+        run: pip install -e ".[dev,api,onnx]"
 
       - name: Run tests with coverage
         run: pytest --cov=nv_maser --cov-report=xml --cov-fail-under=80
