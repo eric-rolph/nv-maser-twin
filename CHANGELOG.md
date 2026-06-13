@@ -6,6 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added (baselines & buildability)
+
+- **`LeastSquaresShimmer`** (`nv_maser.model.lstsq_baseline`) — closed-form
+  ridge least-squares shimming, the provably optimal open-loop correction
+  for the linear coil model and the null hypothesis for the neural
+  controllers. Implements the `controller_fn` protocol for
+  `ClosedLoopSimulator`.
+- **`scripts/eval_baseline.py`** — LSQ vs supervised NN vs PPO comparison
+  in open loop and closed loop, reported against the absolute masing
+  tolerance. Measured: CNN sits exactly at the linear optimum (1.25x vs
+  1.26x) at ~100x the latency; the default synthetic disturbance benchmark
+  is unwinnable by ANY controller (residual ~300x above the masing
+  tolerance; the coil basis spans only ~1/3 of the disturbance energy).
+- **`scripts/halbach_tolerance_study.py`** — manufacturing-tolerance ×
+  segment-count buildability study using static LSQ shimming. Verdict: the
+  default 8-segment array cannot be shimmed into masing range; 16-24
+  grade-sorted segments + one static shim reaches 62-82% build success.
+- README "Baselines and buildability" section documenting both results.
+- 8 tests for the baseline (exact in-span cancellation, loss optimality,
+  current clipping, batch consistency, controller protocol).
+
 ### Added (calibration wiring)
 
 - **`calibration.reference_map_path` is now functional**: when set,

@@ -94,6 +94,8 @@ scripts/
 ├── train_rl.py             REINFORCE policy-gradient baseline
 ├── train_ppo.py            PPO training CLI (modern RL)
 ├── run_sweep.py            Hyperparameter grid search (lr × arch)
+├── eval_baseline.py        LSQ vs NN vs PPO comparison (open + closed loop)
+├── halbach_tolerance_study.py  Buildability: tolerances × segments × shimming
 ├── export_onnx.py          ONNX export CLI
 ├── build_dataset.py        Dataset pre-build CLI
 └── show_experiments.py     Inspect SQLite experiment history
@@ -217,6 +219,34 @@ Measured on CPU (PyTorch 2.x, no CUDA), 300 reps per architecture after 20 warm-
 **Spec**: B=1 median inference < 1.0 ms on CPU (PyTorch 2.x)
 
 RL environment step latency: ~0.030 ms mean (100-step benchmark, `ShimmingEnv.step()`).
+
+---
+
+## Baselines and buildability
+
+The coil field is **linear in the currents**, so ridge least-squares is the provably optimal open-loop correction — every learned controller is bounded by it. `scripts/eval_baseline.py` reports all controllers against that bound and against the absolute masing tolerance (field std ≤ 11.4 µT for the default design, from `max_tolerable_b_std`):
+
+| Method (open loop, 500 samples) | Mean residual std | Improvement | Reaches masing tolerance |
+|---|---|---|---|
+| No shimming | 4013 µT | 1.00× | 0% |
+| **Least-squares (optimal bound)** | 3176 µT | **1.26×** | 0% |
+| CNN (supervised, `best.pt`) | 3214 µT | 1.25× | 0% |
+| PPO (`best_ppo.pt`) | 4014 µT | 1.00× | 0% |
+
+Two honest readings of this table:
+
+1. **The CNN sits at the linear optimum** — it has learned the projection correctly, but a 30-line closed-form solver matches it at 100× lower latency. (PPO scores 1.00× here only because it was trained for sequential correction; see the closed-loop section of the script.)
+2. **The default synthetic benchmark is unwinnable.** The 8-harmonic coil basis captures only ~⅓ of the band-limited disturbance energy, and the 4 mT disturbance scale is ~350× the masing tolerance. No controller of any kind reaches masing on this task — it measures basis projection quality, not maser viability.
+
+The physically real shimming problem — static Halbach manufacturing error, which *is* dominated by low-order multipoles the coils can cancel — looks very different. `scripts/halbach_tolerance_study.py` (200 realizations per cell, one static least-squares shim, currents ≤ 1 A):
+
+| Build quality (Br/angle/position tol.) | 8 segments | 16 segments | 24 segments |
+|---|---|---|---|
+| Precision (0.5% / 0.5° / 0.02 mm) | 1.5% mase | **62% mase** | **82% mase** |
+| Standard (1% / 1° / 0.05 mm) | 0% | 5.5% | 15% |
+| Budget (2% / 1° / 0.10 mm) | 0% | 2.5% | 5.5% |
+
+**Design takeaway:** the default 8-segment array cannot be shimmed into masing range at any realistic tolerance; **16–24 grade-sorted segments plus a single static shim** is the minimum buildable configuration predicted by the twin.
 
 ---
 
